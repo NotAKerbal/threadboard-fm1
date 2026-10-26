@@ -31,7 +31,7 @@ brightness and flashing, as described in the [interaction guide](interactions.md
 | --- | --- |
 | [Transparent icon](assets/threadboard-icon.png) | Project icon and document headers |
 | [Select a thread](assets/select-thread.png) | README overview and thread selection |
-| [Answer a question](assets/answer-question.png) | Answer choices and explicit PLAY submission |
+| [Answer a question](assets/answer-question-play-v2.png) | Answer choices and explicit PLAY submission |
 | [Review a result](assets/review-result.png) | Result scrolling and SAVE plus thread-key settling |
 
 The illustrations are concepts based on Isaac's scanned board, with illustrative

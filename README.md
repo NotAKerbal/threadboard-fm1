@@ -47,7 +47,7 @@ black keys stay off. Questions requiring typed text and
 approval requests stay in T3. Drafts stay in memory and reset if the request changes.
 An unconfirmed submission stays locked so a retry cannot send it twice.
 
-![Concept illustration of choosing an answer with an upper key, then pressing PLAY to send.](docs/assets/answer-question.png)
+![Concept illustration of choosing an answer with an upper key, then pressing PLAY to send.](docs/assets/answer-question-play-v2.png)
 
 *Choose first, then send. Typed answers and approvals stay in T3 Code.*
 

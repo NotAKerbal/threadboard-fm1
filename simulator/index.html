@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Threadboard</title><link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<main>
+  <header><div><span class="eyebrow">FM-1 × T3 CODE</span><h1>Threadboard</h1></div><span id="connection" role="status">Connecting to T3…</span></header>
+  <p class="intro">White keys keep your threads. Black keys choose answers for the selected thread. PLAY sends them.</p>
+  <section class="instrument" aria-label="FM-1 thread console">
+    <div class="panel">
+      <div class="screen" aria-live="polite">
+        <div class="screen-top"><span id="project">THREADBOARD</span><span id="key-number">01</span></div>
+        <h2 id="thread-title">Loading your threads…</h2>
+        <span id="thread-state" class="state-label">Connecting</span>
+        <p id="detail"></p>
+        <div class="screen-bottom" id="summary">Assignments persist on your Mac</div>
+      </div>
+      <div class="controls">
+        <div class="control-group"><button id="next" type="button">Next needing me <kbd>SEL</kbd></button><button id="stop" type="button">Stop work <kbd>REC</kbd></button></div>
+        <button id="settle" type="button">Settle thread <kbd>SAVE + KEY</kbd></button>
+        <button id="send-answers" type="button" hidden>Send answers <kbd>PLAY</kbd></button>
+        <p id="hardware">Checking FM-1 connection…</p>
+        <p id="demo-label" hidden>Demo threads. These controls do not affect T3.</p>
+        <div id="demo-controls" hidden aria-label="Simulate thread status"><button data-state="working" type="button">Working</button><button data-state="attention" type="button">Needs me</button><button data-state="finished" type="button">Finished</button></div>
+      </div>
+    </div>
+    <section id="question-panel" hidden aria-label="Question choices">
+      <p id="question-progress"></p><h2 id="question-title"></h2><p id="question-text"></p>
+      <div class="question-navigation"><button id="question-prev" type="button">Previous question</button><button id="question-next" type="button">Next question <kbd>K2</kbd></button><button id="page-prev" type="button">Previous options</button><button id="page-next" type="button">More options <kbd>K3</kbd></button></div>
+      <div id="answer-options"></div><p class="answer-help">Black keys choose or toggle these answers. PLAY sends the completed answers. Use T3 for a custom answer.</p>
+    </section>
+    <div id="keyboard" class="keyboard" role="group" aria-label="Thread and answer keys"></div>
+    <div class="instrument-footer"><span>THREADBOARD / FM-1</span><span>16 THREADS · 11 ANSWER KEYS</span></div>
+  </section>
+  <div class="legend" aria-label="Key light meanings"><span><i class="led attention"></i>Needs you</span><span><i class="led working"></i>Working</span><span><i class="led idle"></i>Assigned</span><span><i class="led empty"></i>Available</span></div>
+  <p id="overflow" hidden></p>
+  <p id="notice" role="status" aria-live="polite"></p>
+  <section class="thread-list" aria-label="Assigned threads"><h2>Your keys</h2><div id="assignments"></div></section>
+</main>
+<script src="/app.js" defer></script>
+</body>
+</html>

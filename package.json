@@ -1,0 +1,25 @@
+{
+  "name": "threadboard-fm1",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node bridge/main.ts",
+    "demo": "node bridge/main.ts --demo",
+    "check": "tsc --noEmit",
+    "test": "node --test tests/*.test.ts tests/desktop-adapter.mjs",
+    "build:midi": "sh scripts/build-midi.sh",
+    "build:firmware": "python3 scripts/build-firmware.py",
+    "build:host": "python3 scripts/build-firmware.py --host",
+    "test:firmware": "python3 tests/firmware_test.py",
+    "test:browser": "node tests/browser.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.3",
+    "playwright": "^1.56.1"
+  }
+}

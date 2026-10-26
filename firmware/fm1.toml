@@ -1,0 +1,12 @@
+name = "THREADBOARD"
+id_prefix = "FM-1_987"
+usb_manufacturer = "Threadboard"
+usb_product = "Threadboard FM-1"
+ble = false
+usb_audio_in = false
+usb_audio_out = false
+words = "words.tsv"
+font_full = ["M"]
+tagline = "Your T3 Code threads on physical keys"
+licence = "MIT"
+credits = "Built on fm1-base by Charles Vestal and felucca-bsp by Hugelton Instruments."

@@ -29,7 +29,10 @@ the selected thread's work, including delegated work.
 
 ## Answer a question
 
-![Choosing an answer with an upper key, then using the PLAY transport button to send.](assets/answer-question.png)
+![Choosing an answer with an upper key, then pressing PLAY in the bottom row of the right-hand button bank.](assets/answer-question.png)
+
+PLAY is four buttons to the right of HOME in the bottom row of the button bank
+to the right of the screen. It is second from the right edge.
 
 1. Select the thread asking the question.
 2. Press a black key for the corresponding answer. A single choice advances

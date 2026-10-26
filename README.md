@@ -67,6 +67,9 @@ An unconfirmed submission stays locked so a retry cannot send it twice.
 | HOME | Show the control reference |
 | MASTER | Chime volume, with mute at zero |
 
+PLAY is in the bottom row of the button bank to the right of the screen,
+four buttons to the right of HOME and second from the right edge.
+
 The screen shows the project, thread title, status and a short response preview.
 Select a finished thread to read an excerpt of its final response in a dedicated
 result view. K1 scrolls it; PLAY opens the full thread in T3; SAVE + its white key

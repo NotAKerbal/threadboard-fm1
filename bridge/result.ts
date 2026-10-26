@@ -3,10 +3,11 @@ import type { Thread } from './types.ts';
 // Use the agent's own result, without generating a second interpretation.
 export function resultExcerpt(thread: Thread): string {
   const message = 'latestAssistantMessage' in thread ? thread.latestAssistantMessage : thread.latestVisibleMessage?.role === 'assistant' ? thread.latestVisibleMessage : null;
-  if (!message?.text.trim()) return thread.messageReadError ? 'Could not load the response. Retrying automatically. PLAY opens T3.' : 'This run has no saved final response. PLAY opens T3.';
-  return messageExcerpt(message.text);
+  const open = thread.resumeCommand ? 'Resume the thread to read the full response.' : 'PLAY opens T3.';
+  if (!message?.text.trim()) return thread.messageReadError ? `Could not load the response. Retrying automatically. ${open}` : `This run has no saved final response. ${open}`;
+  return messageExcerpt(message.text, thread.resumeCommand ? 'Resume the thread for the full result.' : undefined);
 }
-export function messageExcerpt(text: string): string {
+export function messageExcerpt(text: string, more = 'Open in T3 for the full result.'): string {
   const plain = text
     .replace(/```[^\n]*\n/g, '').replace(/```/g, '')
     .replace(/!?\[([^\]]+)\]\([^)]*\)/g, '$1')
@@ -16,5 +17,5 @@ export function messageExcerpt(text: string): string {
     .replace(/`/g, '').replace(/\s+/g, ' ').trim();
   if (plain.length <= 1200) return plain;
   const prefix = plain.slice(0, 1150);
-  return prefix.slice(0, prefix.lastIndexOf(' ') > 1100 ? prefix.lastIndexOf(' ') : prefix.length) + ' ... Open in T3 for the full result.';
+  return prefix.slice(0, prefix.lastIndexOf(' ') > 1100 ? prefix.lastIndexOf(' ') : prefix.length) + ' ... ' + more;
 }

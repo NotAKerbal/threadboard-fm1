@@ -38,15 +38,18 @@ export class Board extends EventEmitter {
       const { slots, overflow } = this.bindings.reconcile(snapshot);
       const selected=slots[this.bindings.saved.selected];
       const thread=snapshot.threads.find(t=>t.id===selected?.threadId);
+      if (thread) await this.client?.readThread?.(thread);
       const question=this.questions.view(thread,slots);
       const result=thread&&isDone(thread)&&selected?.state==='attention'&&!question&&!thread.pendingRuntimeRequest ? {threadId:thread.id,text:resultExcerpt(thread)} : null;
-      const preview=thread&&!thread.unavailable&&!question&&!thread.pendingRuntimeRequest ? {threadId:thread.id,text:result?.text??(thread.latestVisibleMessage?.text.trim()?messageExcerpt(thread.latestVisibleMessage.text):thread.messageReadError?'Could not load messages. Retrying automatically.':'No messages yet.')} : null;
+      const preview=thread&&!thread.unavailable&&!question&&!thread.pendingRuntimeRequest ? {threadId:thread.id,text:result?.text??(thread.latestVisibleMessage?.text.trim()?messageExcerpt(thread.latestVisibleMessage.text, thread.resumeCommand ? 'Resume the thread for the full result.' : undefined):thread.messageReadError?'Could not load messages. Retrying automatically.':'No messages yet.')} : null;
       this.snapshot = snapshot;
       const connected = !snapshot.environments || snapshot.environments.some(e => e.connected);
-      Object.assign(this.view, { environmentId, connected, error: connected ? null : 'All T3 machines are disconnected. Assignments are preserved.', selected: this.bindings.saved.selected, slots, overflow, environments: snapshot.environments,question,result,preview });
+      const capabilities = { ...this.client?.capabilities ?? { stop: true, answer: true } };
+      if (thread?.canStop !== undefined) capabilities.stop = thread.canStop;
+      Object.assign(this.view, { environmentId, connected, error: connected ? null : 'All source machines are disconnected. Assignments are preserved.', selected: this.bindings.saved.selected, slots, overflow, environments: snapshot.environments,question,result,preview, resumeCommand: thread?.resumeCommand ?? null, capabilities, integration: this.client?.integration });
     } catch (e) {
       this.view.connected = false;
-      this.view.error = e instanceof Error ? e.message : 'Could not read T3 threads';
+      this.view.error = e instanceof Error ? e.message : 'Could not read threads';
     }
     this.publish();
   }
@@ -55,11 +58,20 @@ export class Board extends EventEmitter {
     this.refreshing = true;
     try { await this.serial(() => this.refreshNow()); } finally { this.refreshing = false; }
   }
+  async configure(change: () => Promise<void>): Promise<void> {
+    await this.serial(async () => {
+      await change();
+      this.bindings = null; this.snapshot = null; this.questions = new Questions();
+      Object.assign(this.view, { connected: false, environmentId: '', slots: [], selected: 0, overflow: 0, error: null, environments: [], question: null, result: null, preview: null, resumeCommand: null, integration: undefined });
+      this.publish();
+      await this.refreshNow();
+    });
+  }
   setMidi(midi: BoardView['midi']): void { this.view.midi = midi; this.publish(); }
   async act(input: BoardAction): Promise<void> {
     return this.serial(async () => {
       await this.refreshNow();
-      if (!this.view.connected || !this.bindings || !this.snapshot) throw new Error('T3 is disconnected. Assignments are preserved.');
+      if (!this.view.connected || !this.bindings || !this.snapshot) throw new Error('The thread source is disconnected. Assignments are preserved.');
       const { key, token } = input;
       if (!Number.isInteger(key) || key < 0 || key >= KEY_COUNT || !Number.isInteger(token)) throw new Error('Invalid key');
       if(['choose','confirm','question','page'].includes(input.action)){
@@ -89,6 +101,7 @@ export class Board extends EventEmitter {
           else await this.client!.openThread(thread.id);
           break;
         case 'stop':
+          if (this.view.capabilities?.stop === false) throw new Error('Stop this work in its provider. This session has no live stop control.');
           if (!WORKING.has(thread.status) && !thread.activeRunId && !thread.pendingBackgroundTasks?.length) throw new Error('This thread is not working.');
           if (this.demo) { thread.status = 'interrupted'; thread.activeRunId = null; }
           else await this.client!.dispatch({ type: 'thread.stop', threadId: thread.id, reason: 'Stopped from the FM-1' });
@@ -102,8 +115,8 @@ export class Board extends EventEmitter {
         default: throw new Error('Unknown action');
       }
       await this.refreshNow();
-      if (!this.view.connected) throw new Error('The command was sent, but T3 did not confirm its resulting state.');
-      if (input.action === 'settle' && this.view.slots[key]?.threadId === thread.id) throw new Error('T3 has not confirmed settlement yet. The key stays assigned.');
+      if (!this.view.connected) throw new Error('The command was sent, but the source did not confirm its resulting state.');
+      if (input.action === 'settle' && this.view.slots[key]?.threadId === thread.id) throw new Error('The source has not confirmed settlement yet. The key stays assigned.');
     });
   }
   async demoState(key: number, state: string): Promise<void> {

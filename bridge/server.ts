@@ -5,11 +5,12 @@ import { fileURLToPath } from 'node:url';
 import type { Board } from './board.ts';
 import type { BoardAction } from './types.ts';
 import type { DesktopSource, DesktopEnvironment } from './desktop.ts';
+import type { Configuration } from './config.ts';
 
-export function makeServer(board: Board, demo: boolean, desktop?: DesktopSource) {
+export function makeServer(board: Board, demo: boolean, desktopSource?: DesktopSource | (() => DesktopSource | undefined), configuration?: Configuration) {
   const clients = new Set<ServerResponse>();
   const publish = (): void => {
-    const data = `data: ${JSON.stringify({ ...board.view, demo })}\n\n`;
+    const data = `data: ${JSON.stringify({ ...board.view, demo, provider: configuration?.get().provider ?? 't3' })}\n\n`;
     for (const client of clients) {
       if (client.writableLength > 128 * 1024) { client.destroy(); clients.delete(client); }
       else client.write(data);
@@ -33,6 +34,7 @@ export function makeServer(board: Board, demo: boolean, desktop?: DesktopSource)
     const path = new URL(req.url ?? '/', `http://${host}`).pathname;
     try {
       if (path.startsWith('/desktop/')) {
+        const desktop = typeof desktopSource === 'function' ? desktopSource() : desktopSource;
         if (!desktop || req.headers.origin !== 't3code://app') { json(res,403,{error:'T3 desktop origin required'}); return; }
         res.setHeader('access-control-allow-origin','t3code://app'); res.setHeader('vary','Origin');
         if(req.method==='OPTIONS'){res.setHeader('access-control-allow-methods','POST, GET');res.setHeader('access-control-allow-headers','content-type, x-threadboard-desktop');res.writeHead(204);res.end();return;}
@@ -50,10 +52,18 @@ export function makeServer(board: Board, demo: boolean, desktop?: DesktopSource)
         }
         json(res,403,{error:'Invalid desktop channel'});return;
       }
-      if (req.method === 'GET' && path === '/api/state') { json(res, 200, { ...board.view, demo }); return; }
+      if (req.method === 'GET' && path === '/api/config') { json(res, 200, configuration?.get() ?? null); return; }
+      if (req.method === 'POST' && path === '/api/config') {
+        if (!configuration) { json(res, 404, { error: 'Configuration is unavailable in demo mode.' }); return; }
+        if (req.headers.origin !== `http://${host}` || !req.headers['content-type']?.startsWith('application/json')) { json(res, 403, { error: 'Invalid request origin' }); return; }
+        const input = await body(req);
+        await board.configure(() => configuration.set(input));
+        json(res, 200, configuration.get()); return;
+      }
+      if (req.method === 'GET' && path === '/api/state') { json(res, 200, { ...board.view, demo, provider: configuration?.get().provider ?? 't3' }); return; }
       if (req.method === 'GET' && path === '/events') {
         res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store', connection: 'keep-alive' });
-        res.write(`data: ${JSON.stringify({ ...board.view, demo })}\n\n`);
+        res.write(`data: ${JSON.stringify({ ...board.view, demo, provider: configuration?.get().provider ?? 't3' })}\n\n`);
         clients.add(res); req.on('close', () => clients.delete(res)); return;
       }
       if (req.method === 'POST' && (path === '/api/action' || path === '/api/demo')) {

@@ -3,15 +3,22 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Board } from './board.ts';
 import { makeServer } from './server.ts';
-import { T3Client } from './t3.ts';
 import { MidiBridge } from './midi.ts';
-import { DesktopSource } from './desktop.ts';
+import { ConfiguredSource } from './config.ts';
+import type { Provider } from './config.ts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const args = process.argv.slice(2);
 const option = (flag: string, fallback: string): string => { const i = args.indexOf(flag); return i === -1 ? fallback : args[i + 1] ?? fallback; };
 const demo = args.includes('--demo');
 const stateDir = resolve(option('--state-dir', join(root, '.state')));
+const config = demo ? null : await ConfiguredSource.read(stateDir);
+if (config) {
+  config.provider = option('--source', config.provider) as Provider;
+  config.codexSocket = option('--codex-socket', config.codexSocket ?? '') || undefined;
+  for (const provider of ['t3', 'codex', 'claude'] as const) config.homes[provider] = option(`--${provider}-home`, config.homes[provider]);
+}
+const client = config ? new ConfiguredSource(config, stateDir, { t3Cli: option('--t3-cli', process.env.T3CODE_CLI_PATH ?? 't3'), codexCli: option('--codex-cli', 'codex'), claudeCli: option('--claude-cli', 'claude') }) : null;
 const port = Number(option('--port', demo ? '4782' : '4781'));
 if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error('Invalid --port');
 let lock: Awaited<ReturnType<typeof open>> | null = null;
@@ -31,12 +38,10 @@ if (!demo) {
   }
   await lock.writeFile(String(process.pid));
 }
-const t3Home = option('--t3-home', join(process.env.HOME!, '.t3'));
-const local = demo ? null : new T3Client(option('--t3-cli', process.env.T3CODE_CLI_PATH ?? 't3'), t3Home);
-const client = local ? new DesktopSource(local, (await readFile(join(t3Home, 'userdata/environment-id'), 'utf8')).trim()) : null;
 const board = new Board(client, stateDir, demo);
+if (client) client.onChange = () => { void board.refresh(); };
 const midi = demo || args.includes('--no-midi') ? null : new MidiBridge(board, join(root, 'output/threadboard-midi'), option('--midi-name', 'Felucca'));
-const server = makeServer(board, demo, client ?? undefined);
+const server = makeServer(board, demo, () => client?.desktop, client ?? undefined);
 let closing = false;
 let interval: NodeJS.Timeout | null = null;
 async function close(): Promise<void> {

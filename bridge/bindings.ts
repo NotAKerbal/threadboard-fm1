@@ -56,12 +56,14 @@ export class Bindings {
     let changed = false;
     this.saved.slots = this.saved.slots.map(binding => {
       const t = binding && all.get(binding.threadId);
-      // Absence can mean a partial server response. Only explicit state releases a key.
+      // Live snapshots can be partial. A successful full history scan can confirm absence.
+      if (binding && !t && snapshot.completeHistory) { changed = true; return null; }
       if (binding && t && !t.unavailable && !isActive(t)) { changed = true; return null; }
       return binding;
     });
     this.saved.waiting = (this.saved.waiting ?? []).filter(binding => {
       const t = all.get(binding.threadId);
+      if (!t && snapshot.completeHistory) { changed = true; return false; }
       if (t && !t.unavailable && !isActive(t)) { changed = true; return false; }
       return true;
     });

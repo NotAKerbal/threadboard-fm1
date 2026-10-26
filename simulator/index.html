@@ -6,8 +6,23 @@
 </head>
 <body>
 <main>
-  <header><div><span class="eyebrow">FM-1 × T3 CODE</span><h1>Threadboard</h1></div><span id="connection" role="status">Connecting to T3…</span></header>
-  <p class="intro">White keys keep your threads. Black keys choose answers for the selected thread. PLAY sends them.</p>
+  <header><div><span class="eyebrow" id="source-label">FM-1 × THREADS</span><h1>Threadboard</h1></div><span id="connection" role="status">Connecting…</span></header>
+  <p class="intro" id="intro">White keys keep your threads. Black keys choose answers for the selected thread. PLAY sends them.</p>
+  <details id="source-settings" hidden>
+    <summary>Thread source</summary>
+    <form id="source-form">
+      <fieldset><legend>Show threads from</legend><div class="source-options">
+        <label><input type="radio" name="provider" value="t3" checked><span>T3 Code</span></label>
+        <label><input type="radio" name="provider" value="codex"><span>Codex</span></label>
+        <label><input type="radio" name="provider" value="claude"><span>Claude Code</span></label>
+      </div></fieldset>
+      <label class="home-label" for="source-home">Home directory</label>
+      <div class="source-path"><input id="source-home" type="text" required spellcheck="false" autocapitalize="off" autocomplete="off" aria-describedby="source-help"><button id="save-source" type="submit">Save source</button></div>
+      <p id="source-help">Use the selected app's local home directory. No API key is needed.</p>
+      <label id="codex-socket-setting" hidden>Codex control socket, optional<input id="codex-socket" type="text" spellcheck="false" autocomplete="off" placeholder="Use the default daemon"></label>
+      <p id="config-status" role="status"></p>
+    </form>
+  </details>
   <section class="instrument" aria-label="FM-1 thread console">
     <div class="panel">
       <div class="screen" aria-live="polite">
@@ -28,12 +43,14 @@
     <section id="question-panel" hidden aria-label="Question choices">
       <p id="question-progress"></p><h2 id="question-title"></h2><p id="question-text"></p>
       <div class="question-navigation"><button id="question-prev" type="button">Previous question</button><button id="question-next" type="button">Next question <kbd>K2</kbd></button><button id="page-prev" type="button">Previous options</button><button id="page-next" type="button">More options <kbd>K3</kbd></button></div>
-      <div id="answer-options"></div><p class="answer-help">Black keys choose or toggle these answers. PLAY sends the completed answers. Use T3 for a custom answer.</p>
+      <div id="answer-options"></div><p class="answer-help" id="answer-help">Black keys choose or toggle these answers. PLAY sends the completed answers. Use the provider for a custom answer.</p>
     </section>
     <div id="keyboard" class="keyboard" role="group" aria-label="Thread and answer keys"></div>
     <div class="instrument-footer"><span>THREADBOARD / FM-1</span><span>16 THREADS · 11 ANSWER KEYS</span></div>
   </section>
   <div class="legend" aria-label="Key light meanings"><span><i class="led attention"></i>Needs you</span><span><i class="led working"></i>Working</span><span><i class="led idle"></i>Assigned</span><span><i class="led empty"></i>Available</span></div>
+  <section id="integration-panel" hidden aria-label="Live integration"><p id="integration-detail"></p><div id="integration-setup" hidden><p>Enable live sessions in your terminal:</p><pre><code id="setup-command"></code></pre></div></section>
+  <section id="resume-panel" hidden aria-label="Resume selected thread"><p>Resume this thread in your terminal:</p><pre><code id="resume-command"></code></pre></section>
   <p id="overflow" hidden></p>
   <p id="notice" role="status" aria-live="polite"></p>
   <section class="thread-list" aria-label="Assigned threads"><h2>Your keys</h2><div id="assignments"></div></section>

@@ -15,11 +15,16 @@
     "build:firmware": "python3 scripts/build-firmware.py",
     "build:host": "python3 scripts/build-firmware.py --host",
     "test:firmware": "python3 tests/firmware_test.py",
-    "test:browser": "node tests/browser.mjs"
+    "test:browser": "node tests/browser.mjs && node tests/source-browser.mjs",
+    "test:providers": "node tests/provider-smoke.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
-    "typescript": "^5.9.3",
-    "playwright": "^1.56.1"
+    "@types/ws": "^8.18.2",
+    "playwright": "^1.56.1",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "ws": "^8.22.0"
   }
 }

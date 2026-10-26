@@ -2,10 +2,14 @@ export const KEY_COUNT = 27;
 export const THREAD_KEYS = [0,2,4,6,7,9,11,12,14,16,18,19,21,23,24,26] as const;
 export const ANSWER_KEYS = [1,3,5,8,10,13,15,17,20,22,25] as const;
 export interface Question { id: string; header: string; question: string; options: {label:string;description:string;value?:string}[]; multiSelect?:boolean; required?:boolean }
-export interface QuestionRequest { id:string; questions:Question[]; responseCapability:'live'|'message'|'not_resumable' }
+export interface QuestionRequest { id:string; revision?:string; questions:Question[]; responseCapability:'live'|'message'|'not_resumable' }
 export interface QuestionView { token:number; threadId:string; requestId:string; header:string; text:string; index:number; total:number; page:number; pages:number; answered:number; multiSelect:boolean; canSubmit:boolean; submitted:boolean; choices:{key:number;label:string;description:string;selected:boolean}[] }
 export type LightState = 'empty' | 'idle' | 'working' | 'attention' | 'unavailable' | 'snoozed';
 export interface Thread {
+  live?: boolean;
+  canStop?: boolean;
+  settlementKey?: string;
+  resumeCommand?: string;
   id: string;
   projectId: string;
   title: string;
@@ -37,6 +41,7 @@ export interface Thread {
   questionRequest?: QuestionRequest | null;
 }
 export interface ShellSnapshot {
+  completeHistory?: boolean;
   schemaVersion: number;
   snapshotSequence: number;
   threads: Thread[];
@@ -46,9 +51,14 @@ export interface ShellSnapshot {
   question?: QuestionView | null;
 }
 export interface EnvironmentStatus { id: string; label: string; connected: boolean; error: string | null }
+export interface IntegrationStatus { mode: 'live' | 'history' | 'hooks'; detail: string; setupCommand?: string }
 export interface ThreadSource {
+  onChange?: () => void;
+  integration?: IntegrationStatus;
   environmentId: string;
+  capabilities?: { stop: boolean; answer: boolean };
   snapshot(): Promise<ShellSnapshot>;
+  readThread?(thread: Thread): Promise<void>;
   dispatch(command: Record<string, unknown>): Promise<void>;
   openThread(id: string): Promise<void>;
 }
@@ -73,6 +83,9 @@ export interface Slot {
   machine?: string;
 }
 export interface BoardView {
+  integration?: IntegrationStatus;
+  capabilities?: { stop: boolean; answer: boolean };
+  resumeCommand?: string | null;
   preview?: { threadId: string; text: string } | null;
   result?: { threadId: string; text: string } | null;
   question?: QuestionView | null;

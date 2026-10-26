@@ -32,7 +32,7 @@ export class Questions {
     const current=this.current;
     if(!current||input.token!==current.draft.token||selected.threadId!==current.thread.id)throw new Error('This question changed. Refresh before answering.');
     const {thread,request,draft}=current;
-    if(draft.submitted)throw new Error('Answers were already sent. Check T3 for confirmation.');
+    if(draft.submitted)throw new Error('Answers were already sent. Check the provider for confirmation.');
     const q=request.questions[draft.index]!;
     if(input.action==='choose'){
       const n=ANSWER_KEYS.findIndex(k=>k===input.key),option=n>=0?q.options[draft.page*ANSWER_KEYS.length+n]:undefined;

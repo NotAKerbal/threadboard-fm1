@@ -4,7 +4,7 @@ export const ANSWER_KEYS = [1,3,5,8,10,13,15,17,20,22,25] as const;
 export interface Question { id: string; header: string; question: string; options: {label:string;description:string;value?:string}[]; multiSelect?:boolean; required?:boolean }
 export interface QuestionRequest { id:string; questions:Question[]; responseCapability:'live'|'message'|'not_resumable' }
 export interface QuestionView { token:number; threadId:string; requestId:string; header:string; text:string; index:number; total:number; page:number; pages:number; answered:number; multiSelect:boolean; canSubmit:boolean; submitted:boolean; choices:{key:number;label:string;description:string;selected:boolean}[] }
-export type LightState = 'empty' | 'idle' | 'working' | 'attention' | 'unavailable';
+export type LightState = 'empty' | 'idle' | 'working' | 'attention' | 'unavailable' | 'snoozed';
 export interface Thread {
   id: string;
   projectId: string;
@@ -14,6 +14,8 @@ export interface Thread {
   latestRunId: string | null;
   latestRunCompletedAt?: string | null;
   latestVisibleMessage: { id: string; role: string; text: string; updatedAt: string } | null;
+  latestAssistantMessage?: Thread['latestVisibleMessage'];
+  messageReadError?: boolean;
   latestUserAuthoredMessageAt?: string | null;
   lastVisitedAt?: string | null;
   pendingRuntimeRequest: { id: string; kind: string; blocking?: boolean } | null;
@@ -71,6 +73,7 @@ export interface Slot {
   machine?: string;
 }
 export interface BoardView {
+  preview?: { threadId: string; text: string } | null;
   result?: { threadId: string; text: string } | null;
   question?: QuestionView | null;
   environmentId: string;
@@ -95,7 +98,7 @@ export function isActive(t: Thread): boolean {
 export function lightState(t: Thread, now = Date.now()): { state: LightState; reason: string } {
   if (t.unavailable) return { state: 'unavailable', reason: `${t.machine ?? 'Machine'} is disconnected` };
   if (!isActive(t)) return { state: 'idle', reason: 'Settled' };
-  if (t.snoozedUntil && Date.parse(t.snoozedUntil) > now) return { state: 'idle', reason: 'Snoozed' };
+  if (t.snoozedUntil && Date.parse(t.snoozedUntil) > now) return { state: 'snoozed', reason: 'Snoozed' };
   if (t.pendingRuntimeRequest) {
     return { state: 'attention', reason: /approv|permission/.test(t.pendingRuntimeRequest.kind) ? 'Approval waiting' : 'Question waiting' };
   }

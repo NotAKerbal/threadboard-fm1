@@ -5,7 +5,7 @@ const names = ['F3','F♯3','G3','G♯3','A3','A♯3','B3','C4','C♯4','D4','D�
 const threadNumber=key=>String(white.indexOf(key)+1).padStart(2,'0');
 const keys = new Map();
 let view = null, busy = false, lastList = '', noticeTimer;
-const labels = {empty:'Available',idle:'Ready',working:'Working',attention:'Needs you',unavailable:'Unavailable'};
+const labels = {empty:'Available',idle:'Ready',working:'Working',attention:'Needs you',unavailable:'Unavailable',snoozed:'Snoozed'};
 for (let key=0;key<27;key++) {
   const button=document.createElement('button');button.type='button';button.className='thread-key';button.dataset.key=String(key);button.dataset.state='empty';button.setAttribute('aria-pressed','false');
   const led=document.createElement('i');led.className='key-led';led.setAttribute('aria-hidden','true');
@@ -34,11 +34,10 @@ function render(data) {
   if(selected){
     el('project').textContent=selected.project||'THREADBOARD';el('key-number').textContent=threadNumber(data.selected);
     el('thread-title').textContent=selected.threadId?selected.title:'This key is available';el('thread-state').textContent=data.connected?labels[selected.state].toUpperCase():'DISCONNECTED';
-    el('detail').textContent=data.connected?(data.result?.text??selected.detail):'Your assignments are preserved. Reconnect T3 to continue.';
-    el('detail').parentElement.classList.toggle('has-result',!!data.result);
+    el('detail').textContent=data.connected?(data.result?.text??data.preview?.text??selected.detail):'Your assignments are preserved. Reconnect T3 to continue.';
+    el('detail').parentElement.classList.toggle('has-result',!!(data.result||data.preview));
   }
-  const need=data.slots.filter(s=>s.threadId&&s.state==='attention').length,working=data.slots.filter(s=>s.threadId&&s.state==='working').length;
-  el('summary').textContent=data.result?'RESULT EXCERPT · SCROLL TO READ':`${need} need you · ${working} working`;
+  const need=data.slots.filter(s=>s.threadId&&s.state==='attention').length;
   for(const slot of data.slots){const key=keys.get(slot.key),answer=black.includes(slot.key);key.dataset.state=slot.state;key.setAttribute('aria-pressed',String(answer?slot.status==='answer-selected':slot.key===data.selected));key.setAttribute('aria-label',answer?`Answer key ${black.indexOf(slot.key)+1}, ${slot.token?slot.title:'No question choice'}`:`Thread ${threadNumber(slot.key)}, ${names[slot.key]}, ${slot.title}, ${labels[slot.state]}`);key.title=answer?slot.title:`${threadNumber(slot.key)}: ${slot.title}`;key.disabled=busy||!data.connected||(answer&&(!slot.token||data.question?.submitted));}
   const q=data.question;el('question-panel').hidden=!q;el('send-answers').hidden=!q;el('send-answers').disabled=busy||!data.connected||!q?.canSubmit;
   if(q){

@@ -66,7 +66,7 @@ export class Bindings {
       return true;
     });
     const assigned = new Set([...this.saved.slots.flatMap(b => b ? [b.threadId] : []), ...this.saved.waiting.map(b => b.threadId)]);
-    const rank = (t: Thread): number => ({ attention: 0, working: 1, idle: 2, empty: 3, unavailable: 4 })[lightState(t).state];
+    const rank = (t: Thread): number => ({ attention: 0, working: 1, idle: 2, snoozed: 2, empty: 3, unavailable: 4 })[lightState(t).state];
     const candidates = snapshot.threads.filter(t => isActive(t) && !assigned.has(t.id))
       .sort((a, b) => rank(a) - rank(b) || b.updatedAt.localeCompare(a.updatedAt) || a.id.localeCompare(b.id));
     for (const key of THREAD_KEYS) {

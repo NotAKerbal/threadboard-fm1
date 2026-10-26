@@ -42,6 +42,8 @@ script+=inject(result[:first]+result[first+1:])+['wait 32','expect result_len 0'
 script+=inject(result)+['wait 32','expect result_len '+str(fixture['resultLength']),'expect question 0','expect mid 0','expect answer_lights 0','shot finished-result.png','spin K1 60','wait 32','expect scrolled 1','shot finished-result-end.png']
 script+=inject(result)+['wait 32','expect scrolled 1']
 script+=inject(fixture['resultClear'])+['wait 32','expect result_len 0','expect scroll 0']
+script+=inject(fixture['sleeping'])+['wait 32','expect breath 1','wait 6100','expect linked 0','expect breath 0']
+script+=inject(fixture['awake'])+['wait 32','expect linked 1','expect breath 0']
 path=out/'scenario.tb';path.write_text('\n'.join(script)+'\n')
 expanded=[]
 for line in script:

@@ -1,5 +1,6 @@
 // Adapter for T3 Nightly 0.1.3-nightly.20261025.3692. It uses the app's existing
 // connections and dispatchers; no saved credentials are read or exported.
+import {createMessageReader} from './thread-messages.js';
 export async function install(base = 'http://127.0.0.1:4781') {
   if (location.origin !== 't3code://app') throw new Error('Install this in the T3 desktop console.');
   globalThis.threadboardDesktop?.stop();
@@ -13,7 +14,7 @@ export async function install(base = 'http://127.0.0.1:4781') {
   if (!registry?.get || !shells?.stateValueAtom || !connections?.catalogValueAtom || !queries.h?.v2?.dispatchCommand?.run) throw new Error('T3 updated. Threadboard needs a matching desktop adapter.');
   const readProjection=async(environmentId,threadId)=>{
     const result=await utils.Jl(registry,queries.h.v2.threadProjection({environmentId,input:{threadId}}),{refresh:true,reportFailure:false,signal:AbortSignal.timeout(5000)});
-    if(result._tag!=='Success')throw new Error('Could not read this question from T3.');
+    if(result._tag!=='Success')throw new Error('Could not read this thread from T3.');
     return result.value;
   };
   return connect({registry,shells,connections,dispatchCommand:queries.h.v2.dispatchCommand,readProjection},base);
@@ -65,8 +66,16 @@ export async function connect({registry,shells,connections,dispatchCommand,readP
     return {id,label:e.target.label,connected:state.status==='live',snapshot:s ? {schemaVersion:2,snapshotSequence:s.snapshotSequence,threads:s.threads.map(thread),archivedThreads:s.archivedThreads.map(thread),projects:s.projects.map(p=>({id:p.id,title:p.title}))} : null};
   });
   const questionCache=new Map();
+  const messageReaders=new Map();
   const snapshot=async()=>{
     const environments=catalogSnapshot();
+    const active=new Set(environments.map(e=>e.id));
+    for(const key of messageReaders.keys())if(!active.has(key))messageReaders.delete(key);
+    await Promise.all(environments.map(async e=>{
+      if(!e.connected||!e.snapshot||!readProjection)return;
+      if(!messageReaders.has(e.id))messageReaders.set(e.id,createMessageReader(id=>readProjection(e.id,id)));
+      await messageReaders.get(e.id)(e.snapshot.threads);
+    }));
     await Promise.all(environments.flatMap(e=>!e.connected||!readProjection?[]:e.snapshot?.threads.filter(t=>t.pendingRuntimeRequest?.kind==='user_input').map(async t=>{
       const key=JSON.stringify([e.id,t.id,t.pendingRuntimeRequest.id]);
       let cached=questionCache.get(key);

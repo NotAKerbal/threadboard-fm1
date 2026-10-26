@@ -42,6 +42,9 @@ test('desktop channel rejects other origins and requires its session capability'
     for(const origin of ['http://evil.example','null',base])assert.equal((await fetch(base+'/desktop/attach',{method:'POST',headers:{origin}})).status,403);
     const attach=await fetch(base+'/desktop/attach',{method:'POST',headers:{origin:'t3code://app'}});assert.equal(attach.status,200);
     const {token}=await attach.json() as {token:string};
+    const script=await fetch(base+'/desktop/adapter.js',{headers:{origin:'t3code://app'}}).then(r=>r.text());
+    assert(!script.includes("from './thread-messages.js'"));
+    await import('data:text/javascript;base64,'+Buffer.from(script).toString('base64'));
     const send=(cap:string)=>fetch(base+'/desktop/snapshot',{method:'POST',headers:{origin:'t3code://app','content-type':'application/json','x-threadboard-desktop':cap},body:JSON.stringify({environments:machines()})});
     assert.equal((await send('wrong')).status,403);assert.equal((await send(token)).status,200);
     assert.equal((await source.snapshot()).threads.length,2);

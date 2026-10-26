@@ -36,7 +36,11 @@ export function makeServer(board: Board, demo: boolean, desktop?: DesktopSource)
         if (!desktop || req.headers.origin !== 't3code://app') { json(res,403,{error:'T3 desktop origin required'}); return; }
         res.setHeader('access-control-allow-origin','t3code://app'); res.setHeader('vary','Origin');
         if(req.method==='OPTIONS'){res.setHeader('access-control-allow-methods','POST, GET');res.setHeader('access-control-allow-headers','content-type, x-threadboard-desktop');res.writeHead(204);res.end();return;}
-        if(req.method==='GET'&&path==='/desktop/adapter.js'){res.writeHead(200,{'content-type':'text/javascript'});res.end(await readFile(fileURLToPath(new URL('./desktop-adapter.js',import.meta.url))));return;}
+        if(req.method==='GET'&&path==='/desktop/adapter.js'){
+          const reader=await readFile(fileURLToPath(new URL('./thread-messages.js',import.meta.url)),'utf8');
+          const adapter=await readFile(fileURLToPath(new URL('./desktop-adapter.js',import.meta.url)),'utf8');
+          res.writeHead(200,{'content-type':'text/javascript'});res.end(reader+'\n'+adapter.replace("import {createMessageReader} from './thread-messages.js';",''));return;
+        }
         if(req.method==='POST'&&path==='/desktop/attach'){json(res,200,{token:desktop.token});return;}
         if(req.method==='POST'&&path==='/desktop/snapshot'&&req.headers['x-threadboard-desktop']===desktop.token){
           const data=await body(req,4*1024*1024) as {environments:DesktopEnvironment[];result?:{id:string;ok:boolean}};

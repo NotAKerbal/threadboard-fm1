@@ -2,9 +2,12 @@ import type { Thread } from './types.ts';
 
 // Use the agent's own result, without generating a second interpretation.
 export function resultExcerpt(thread: Thread): string {
-  const message = thread.latestVisibleMessage;
-  if (!message || message.role !== 'assistant' || !message.text.trim()) return 'No final response is available. Press PLAY to open this thread in T3.';
-  const plain = message.text
+  const message = 'latestAssistantMessage' in thread ? thread.latestAssistantMessage : thread.latestVisibleMessage?.role === 'assistant' ? thread.latestVisibleMessage : null;
+  if (!message?.text.trim()) return thread.messageReadError ? 'Could not load the response. Retrying automatically. PLAY opens T3.' : 'This run has no saved final response. PLAY opens T3.';
+  return messageExcerpt(message.text);
+}
+export function messageExcerpt(text: string): string {
+  const plain = text
     .replace(/```[^\n]*\n/g, '').replace(/```/g, '')
     .replace(/!?\[([^\]]+)\]\([^)]*\)/g, '$1')
     .replace(/^\s{0,3}(?:#{1,6}\s+|[-*+]\s+|>\s?)/gm, '')

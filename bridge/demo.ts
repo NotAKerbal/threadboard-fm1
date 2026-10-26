@@ -9,6 +9,7 @@ export function demoSnapshot(): ShellSnapshot {
     updatedAt: now, createdAt: now, lastVisitedAt: null,
   });
   const threads = [thread('reader','Improve reader controls','verse','running'), thread('auth','Check sign-in persistence','verse','waiting'), thread('storage','Review backup storage','lab','completed'), thread('bridge','Build agent console','tools','running'), thread('journal','Simplify journal notes','verse','idle')];
+  threads[0]!.latestVisibleMessage = { id: 'progress-1', role: 'assistant', text: 'Checking the reader controls. I am verifying that the saved reading position is restored when you reopen a book.', updatedAt: now };
   threads[1]!.pendingRuntimeRequest = { id: 'question-1', kind: 'user-input', blocking: true };
   threads[1]!.questionRequest=demoQuestion('question-1');
   threads[2]!.latestVisibleMessage = { id: 'm-1', role: 'assistant', text: 'The backup finished successfully. Ready for you to review the retention settings.', updatedAt: now };

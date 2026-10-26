@@ -32,13 +32,15 @@ try {
   await page.waitForFunction(()=>document.querySelector('#thread-state').textContent==='NEEDS YOU');
   await page.locator(`.thread-key[data-key="${question.key}"]`).click();
   await page.waitForFunction(()=>document.querySelector('#detail').textContent.startsWith('The work is ready for you to review.'));
-  assert.equal(await page.locator('#summary').textContent(),'RESULT EXCERPT · SCROLL TO READ');
+  assert.equal(await page.locator('#summary').count(),0);
   await page.getByRole('button',{name:'Settle thread'}).click();
   await page.waitForFunction(key=>document.querySelector(`.thread-key[data-key="${key}"]`).dataset.state==='empty',question.key);
   state=await page.request.get(base+'/api/state').then(r=>r.json());assert.equal(state.slots[question.key].threadId,null);
-  const running=state.slots.find(s=>s.state==='working');
+  const running=state.slots.find(s=>s.state==='working'&&s.detail.includes('saved reading position'));
+  assert(running,'A working demo thread has a message to preview');
   await page.locator(`.thread-key[data-key="${running.key}"]`).click();
   await page.waitForFunction(key=>document.querySelector('#key-number').textContent===String(key).padStart(2,'0'),white.indexOf(running.key)+1);
+  await page.waitForFunction(()=>document.querySelector('#detail').textContent.includes('saved reading position'));
   await page.getByRole('button',{name:'Stop work'}).click();
   await page.waitForFunction(()=>document.querySelector('#thread-state').textContent==='READY');
   state=await page.request.get(base+'/api/state').then(r=>r.json());assert.equal(state.slots[running.key].threadId,running.threadId);

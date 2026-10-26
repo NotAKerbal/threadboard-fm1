@@ -10,6 +10,8 @@ firmware also contains these components with their original notices retained:
   Hügelton Instruments and contributors, revision
   `2cd696a2b94341077303e9132bb4be3d0a87ebcf`, MPL-2.0.
   License and notices: `vendor/fm1-base/bsp/LICENSE`, `NOTICE`, `LICENSING.md`.
+  `scripts/build-firmware.py` changes its native LED breath period to 4.5 seconds
+  for snoozed threads. The fade and LED scanning code remain upstream.
 - Terminus bitmap fonts, SIL Open Font License 1.1. The original notice is
   `vendor/fm1-base/assets/fonts/Terminus-LICENSE.txt`.
 - JieLi AC79 SDK boot and packaging files, Apache-2.0. The exact revision and

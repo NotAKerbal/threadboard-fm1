@@ -8,6 +8,15 @@ import { demoSnapshot } from '../bridge/demo.ts';
 import { lightState, THREAD_KEYS, ANSWER_KEYS } from '../bridge/types.ts';
 import type { Thread } from '../bridge/types.ts';
 
+test('snoozed threads breathe until expiry while unavailable machines stay unavailable', () => {
+  const thread=demoSnapshot().threads[0]!;
+  thread.snoozedUntil='2026-10-26T10:00:00Z';
+  assert.equal(lightState(thread,Date.parse('2026-10-26T09:59:59Z')).state,'snoozed');
+  assert.equal(lightState(thread,Date.parse(thread.snoozedUntil)).state,'working');
+  thread.unavailable=true;
+  assert.equal(lightState(thread,Date.parse('2026-10-26T09:59:59Z')).state,'unavailable');
+});
+
 test('a thread keeps its key through reorder, new threads, completion and process restart', () => {
   const dir = mkdtempSync(join(tmpdir(), 'threadboard-'));
   try {

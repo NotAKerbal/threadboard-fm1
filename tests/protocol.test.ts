@@ -20,7 +20,7 @@ test('a complete snapshot sends every key including empty keys, and includes per
   for(let i=0;i<27;i++) {assert.equal(raw[i+1]![10],i);assert.equal(raw[i+1]!.readUInt32LE(12),board.view.slots[i]!.token);}
 });
 
-test('finished results cross the MIDI link in bounded chunks and clear when selecting another thread', async () => {
+test('finished results and working previews cross MIDI without leaking the previous thread', async () => {
   const board=new Board(null,'unused',true);await board.refresh();
   const slot=board.view.slots.find(s=>s.status==='completed')!;
   const t=board.snapshot!.threads.find(t=>t.id===slot.threadId)!;
@@ -38,7 +38,10 @@ test('finished results cross the MIDI link in bounded chunks and clear when sele
   const other=board.view.slots.find(s=>s.status==='running')!;
   await board.act({action:'select',key:other.key,token:other.token});
   assert.equal(board.view.result,null);
-  const empty=snapshotFrames(board.view,123).map(f=>decodeFrame(f)!).find(b=>b[1]===7)!;
+  const preview=snapshotFrames(board.view,123).map(f=>decodeFrame(f)!).filter(b=>b[1]===7);
+  const nextText=Buffer.concat(preview.map(b=>b.subarray(14))).toString('ascii');
+  assert.equal(nextText,board.view.preview?.text);assert(!nextText.includes('The report is ready.'));
+  const empty=snapshotFrames({...board.view,result:null,preview:null},123).map(f=>decodeFrame(f)!).find(b=>b[1]===7)!;
   assert.equal(empty.length,14);assert.equal(empty.readUInt16LE(10),0);
 });
 

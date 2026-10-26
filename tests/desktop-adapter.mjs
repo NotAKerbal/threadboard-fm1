@@ -7,6 +7,24 @@ import {Board} from '../bridge/board.ts';
 import {makeServer} from '../bridge/server.ts';
 import {demoSnapshot} from '../bridge/demo.ts';
 
+test('desktop previews and final results load from projections when shell messages are absent',async()=>{
+ const original=globalThis.fetch,snap=demoSnapshot();
+ const target=snap.threads.find(t=>t.status==='completed');snap.threads=[target];
+ target.latestRunId='latest-run';target.latestVisibleMessage=null;
+ const final={id:'final',runId:'latest-run',role:'assistant',text:'The saved final response from T3.',streaming:false,updatedAt:'2026-10-26T10:00:00.000Z'};
+ const projection={messages:[{...final,id:'old',runId:'old-run',text:'Old result'},final],turnItems:[]};
+ const shell={status:'live',snapshot:{_tag:'Some',value:snap}},catalog={entries:new Map([['remote',{target:{label:'Remote'}}]])};
+ let sent,reads=0;
+ globalThis.fetch=async(url,options)=>{if(url.endsWith('/desktop/snapshot'))sent=JSON.parse(options.body);return Response.json(url.endsWith('/attach')?{token:'test'}:{commands:[]});};
+ try{
+  await connect({registry:{get:a=>a==='catalog'?catalog:shell},connections:{catalogValueAtom:'catalog'},shells:{stateValueAtom:id=>id},readProjection:async()=>{reads++;return projection;},dispatchCommand:{}},'http://test');
+  const thread=sent.environments[0].snapshot.threads[0];
+  assert.equal(thread.latestVisibleMessage?.text,final.text);
+  assert.equal(thread.latestAssistantMessage?.text,final.text);
+  assert.equal(reads,1);
+ }finally{globalThis.threadboardDesktop?.stop();globalThis.fetch=original;}
+});
+
 test('desktop adapter sends existing machines and dispatches through their authenticated runtime',async()=>{
   const source=new DesktopSource(new T3Client(),'local'),board=new Board(null,'unused',true),server=makeServer(board,true,source);
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));

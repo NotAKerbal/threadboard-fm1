@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { randomUUID } from 'node:crypto';
 import type { ShellSnapshot } from './types.ts';
+import { createMessageReader } from './thread-messages.js';
 
 const run = promisify(execFile);
 interface Session { sessionId: string; token: string; expiresAt: string }
@@ -22,6 +23,7 @@ export class T3Client {
   private socket: WebSocket | null = null;
   private ping: NodeJS.Timeout | null = null;
   private nextId = 0;
+  private readMessages = createMessageReader(id => this.request(`/api/orchestration/threads/${encodeURIComponent(id)}`));
   private pending = new Map<string, { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: NodeJS.Timeout }>();
   constructor(cli = process.env.T3CODE_CLI_PATH ?? 't3', baseDir = join(homedir(), '.t3')) { this.cli = cli; this.baseDir = baseDir; }
   private async command(args: string[]): Promise<string> {
@@ -69,6 +71,7 @@ export class T3Client {
       if (typeof t.id !== 'string' || ids.has(t.id) || typeof t.title !== 'string' || typeof t.projectId !== 'string' || !t.lineage || !('settledOverride' in t) || !('pendingRuntimeRequest' in t)) throw new Error('Incomplete T3 thread snapshot. Assignments have been preserved.');
       ids.add(t.id);
     }
+    await this.readMessages(data.threads);
     return data;
   }
   private disconnect(): void {

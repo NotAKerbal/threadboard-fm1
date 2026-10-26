@@ -1,10 +1,10 @@
 /* SPDX-License-Identifier: MIT */
 #include "fastmath.h"
-#define TB_VERSION 4u
+#define TB_VERSION 5u
 #define TB_CMD 0x70u
 #define TB_ALL_KEYS ((1u << NKEYS) - 1u)
 #define TB_THREAD_KEYS 0x05ad5ad5u
-enum { TB_EMPTY, TB_IDLE, TB_WORKING, TB_ATTENTION, TB_UNAVAILABLE };
+enum { TB_EMPTY, TB_IDLE, TB_WORKING, TB_ATTENTION, TB_UNAVAILABLE, TB_SNOOZED };
 enum { TB_BEGIN, TB_SLOT, TB_COMMIT, TB_ACK, TB_ACTION, TB_HELLO, TB_QUESTION, TB_RESULT };
 enum { TB_SELECT, TB_NEXT, TB_STOP, TB_SETTLE, TB_SCROLL, TB_CHOOSE, TB_CONFIRM, TB_QSTEP, TB_QPAGE };
 typedef struct { uint32_t token; uint8_t flags,index,total,page,pages,answered; char header[31],text[241]; } tb_question_t;
@@ -20,7 +20,7 @@ typedef struct {
 } tb_slot_t;
 static tb_slot_t tb_slots[NKEYS], tb_stage[NKEYS];
 static uint32_t tb_session, tb_revision, tb_stage_session, tb_stage_revision, tb_mask;
-static uint32_t tb_heard, tb_hello_at, tb_keys, tb_buttons, tb_bright, tb_dim, tb_mid;
+static uint32_t tb_heard, tb_hello_at, tb_keys, tb_buttons, tb_bright, tb_dim, tb_mid, tb_breath;
 static uint16_t tb_sequence, tb_pending_seq, tb_overflow;
 static uint8_t tb_selected, tb_connected, tb_have_snapshot, tb_staging, tb_redraw, tb_help;
 static uint8_t tb_pending[16], tb_pending_on, tb_retries, tb_last_action;
@@ -118,7 +118,7 @@ void app_usb_cmd(const uint8_t *raw, uint32_t n)
         uint32_t key = b[10], p = b[16], t = b[17], d = b[18];
         tb_slot_t *slot;
         uint32_t token;
-        if (key >= NKEYS || b[11] > TB_UNAVAILABLE || p > 30u || t > 80u || d > 144u || 23u + p + t + d != len) return;
+        if (key >= NKEYS || b[11] > TB_SNOOZED || p > 30u || t > 80u || d > 144u || 23u + p + t + d != len) return;
         token = tb_rd32(b + 12);
         if ((b[11] == TB_EMPTY) != (token == 0u)) return;
         slot = &tb_stage[key]; slot->state = b[11]; slot->token = token;
@@ -227,12 +227,11 @@ static uint32_t tb_wrap(const char *text, char lines[][40], uint32_t limit, cons
 static void tb_draw(void)
 {
     tb_slot_t *slot = &tb_slots[tb_selected];
-    uint32_t band, i, n_title, n_detail, assigned = 0, need = 0, work = 0;
-    char title[4][40], detail[12][40], question_lines[64][40], number[12], counts[40], part[12];
+    uint32_t band, i, n_title, n_detail;
+    char title[4][40], detail[12][40], question_lines[64][40], number[12], part[12];
     uint32_t question_n=0;
     int result_on=tb_result[0]&&!(tb_question.flags&1u);
-    const char *state = slot->state == TB_ATTENTION ? "NEEDS YOU" : slot->state == TB_WORKING ? "WORKING" : slot->state == TB_IDLE ? "READY" : slot->state == TB_UNAVAILABLE ? "UNAVAILABLE" : "AVAILABLE KEY";
-    for (i = 0; i < NKEYS; i++) if(TB_THREAD_KEYS&(1u<<i)){ assigned += tb_slots[i].token != 0; need += tb_slots[i].state == TB_ATTENTION; work += tb_slots[i].state == TB_WORKING; }
+    const char *state = slot->state == TB_ATTENTION ? "NEEDS YOU" : slot->state == TB_WORKING ? "WORKING" : slot->state == TB_IDLE ? "READY" : slot->state == TB_SNOOZED ? "SNOOZED" : slot->state == TB_UNAVAILABLE ? "UNAVAILABLE" : "AVAILABLE KEY";
     n_title = tb_wrap(slot->token ? slot->title : "Press an assigned key", title, 4, &FONT_B);
     n_detail = tb_wrap(slot->detail, detail, 12, &FONT_S);
     if(tb_question.flags&1u){
@@ -245,11 +244,8 @@ static void tb_draw(void)
         }
     }
     if(result_on)question_n=tb_wrap(tb_result,question_lines,64,&FONT_XS);
-    tb_scroll = clamp(tb_scroll, 0, result_on?(question_n>7u?(int32_t)question_n-7:0):tb_question.flags&1u?(question_n>10u?(int32_t)question_n-10:0):n_detail > 3u ? (int32_t)n_detail - 3 : 0);
+    tb_scroll = clamp(tb_scroll, 0, result_on?(question_n>8u?(int32_t)question_n-8:0):tb_question.flags&1u?(question_n>10u?(int32_t)question_n-10:0):n_detail > 4u ? (int32_t)n_detail - 4 : 0);
     { uint32_t position = 0; for (i = 0; i <= tb_selected; i++) position += (TB_THREAD_KEYS >> i) & 1u; tb_number(position, number); }
-    counts[0] = 0;
-    tb_number(need, part); tb_append(counts, part, sizeof counts); tb_append(counts, " need you   ", sizeof counts);
-    tb_number(work, part); tb_append(counts, part, sizeof counts); tb_append(counts, " working", sizeof counts);
     for (band = 0; band < 240u; band += 48u) {
         int32_t y = -(int32_t)band;
         cv_begin(240, 48, C_BLACK);
@@ -276,39 +272,49 @@ static void tb_draw(void)
         } else if(result_on){
             cv_text(10,y+28,&FONT_XS,slot->project,C_GRAY);
             for(i=0;i<n_title&&i<2u;i++)cv_text(10,y+46+(int32_t)i*18,&FONT_B,title[i],C_WHITE);
-            cv_text(10,y+84,&FONT_XS,"RESULT EXCERPT",C_HI);
-            for(i=0;i<7u&&i+(uint32_t)tb_scroll<question_n;i++)cv_text(10,y+102+(int32_t)i*14,&FONT_XS,question_lines[i+(uint32_t)tb_scroll],C_WHITE);
-            cv_text(10,y+212,&FONT_XS,tb_message[0]&&plat_ms()-tb_message_at<2000u?tb_message:"K1: SCROLL  PLAY: OPEN T3",C_HI);
-            cv_text(10,y+226,&FONT_XS,"SAVE + WHITE KEY: SETTLE",C_GRAY);
+            cv_text(10,y+84,&FONT_XS,state,C_HI);
+            for(i=0;i<8u&&i+(uint32_t)tb_scroll<question_n;i++)cv_text(10,y+102+(int32_t)i*14,&FONT_XS,question_lines[i+(uint32_t)tb_scroll],C_WHITE);
+            cv_text(10,y+226,&FONT_XS,tb_message[0]&&plat_ms()-tb_message_at<2000u?tb_message:"K1: SCROLL  PLAY: OPEN T3",C_HI);
         } else {
             cv_text(10, y + 32, &FONT_XS, slot->project, C_GRAY);
             for (i = 0; i < n_title; i++) cv_text(10, y + 56 + (int32_t)i * 18, &FONT_B, title[i], C_WHITE);
             cv_text(10, y + 132, &FONT_XS, state, C_HI);
-            for (i = 0; i < 3u && i + (uint32_t)tb_scroll < n_detail; i++) cv_text(10, y + 154 + (int32_t)i * 17, &FONT_S, detail[i + (uint32_t)tb_scroll], C_GRAY);
+            for (i = 0; i < 4u && i + (uint32_t)tb_scroll < n_detail; i++) cv_text(10, y + 154 + (int32_t)i * 17, &FONT_S, detail[i + (uint32_t)tb_scroll], C_GRAY);
         }
-        if (!result_on && tb_message[0] && plat_ms() - tb_message_at < 2000u) cv_text(10, y + (tb_question.flags&1u?226:212), &FONT_XS, tb_message, C_HI);
+        if (!result_on && tb_message[0] && plat_ms() - tb_message_at < 2000u) cv_text(10, y + 226, &FONT_XS, tb_message, C_HI);
         else if (!result_on && tb_overflow) {
-            tb_number(tb_overflow, part); cv_text(10, y + 212, &FONT_XS, part, C_HI); cv_text(35, y + 212, &FONT_XS, "waiting for a free key", C_GRAY);
-        } else if(!result_on) cv_text(10, y + 212, &FONT_XS, counts, C_GRAY);
+            tb_number(tb_overflow, part); cv_text(10, y + 226, &FONT_XS, part, C_HI); cv_text(35, y + 226, &FONT_XS, "waiting for a free key", C_GRAY);
+        }
         cv_blit(0, band);
     }
-    (void)assigned;
 }
 static void tb_lights(void)
 {
-    uint32_t bright = 0, dim = 0, mid = 0, k, buttons = 1u << B_HOME;
+    uint32_t bright = 0, dim = 0, mid = 0, breath = 0, k, buttons = 1u << B_HOME;
     int linked = tb_linked();
     for (k = 0; k < NKEYS; k++) {
         const tb_slot_t *s = &tb_slots[k];
         if (s->token) dim |= 1u << k;
+        if (linked && s->state == TB_SNOOZED && (TB_THREAD_KEYS & (1u << k))) breath |= 1u << k;
         if (linked && (tb_question.flags & 1u) && !(tb_question.flags & 8u) && !(TB_THREAD_KEYS & (1u << k)) && s->token && s->state == TB_IDLE) mid |= 1u << k;
         if (linked && (s->state == TB_WORKING || (s->state == TB_ATTENTION && (!(TB_THREAD_KEYS & (1u << k)) || (plat_ms() / 500u & 1u))))) bright |= 1u << k;
     }
     if (linked) buttons |= 1u << B_SEL;
     if(linked&&(tb_question.flags&4u))buttons|=1u<<B_PLAY;
-    tb_bright = bright; tb_mid = mid; tb_dim = dim & ~(bright | mid);
+    tb_bright = bright; tb_mid = mid; tb_breath = breath; tb_dim = dim & ~(bright | mid | breath);
     plat_lights(buttons, bright, 0, tb_dim, 1);
     plat_lights_mid(0, mid);
+#ifndef PLAT_HOST
+    /* The pinned BSP handles the fade in its LED scan, without screen redraws. */
+    {
+        uint8_t columns[FM1_NCOL] = {0};
+        for (k = 0; k < NKEYS; k++) if (breath & (1u << k)) {
+            uint8_t pos = led_pos[14u + k];
+            if (pos != 0xFFu) columns[pos >> 3] |= (uint8_t)(1u << (pos & 7u));
+        }
+        for (k = 0; k < FM1_NCOL; k++) fm1_led_breath[k] = columns[k];
+    }
+#endif
 }
 void app_init(void)
 {
@@ -321,6 +327,7 @@ void app_init(void)
     tb_question.flags=tb_stage_question.flags=tb_question_received=0;tb_question.token=tb_stage_question.token=0;
     tb_result[0]=tb_stage_result[0]=0;tb_result_size=tb_result_at=tb_result_received=0;
     tb_chime_requested = tb_chime_seen = 0; tb_chime_frame = 13230u; tb_chime_phase = 0;
+    tb_breath = 0;
 }
 void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
 {
@@ -385,6 +392,7 @@ int app_expect(const char *what, int *got)
     else if (!strcmp(what, "bright")) *got = (int)tb_bright;
     else if (!strcmp(what, "dim")) *got = (int)tb_dim;
     else if (!strcmp(what, "mid")) *got = (int)tb_mid;
+    else if (!strcmp(what, "breath")) *got = (int)tb_breath;
     else if (!strcmp(what, "answer_lights")) *got = (int)(tb_bright & ~TB_THREAD_KEYS);
     else if (!strcmp(what, "result_len")) *got = (int)tb_len(tb_result);
     else if (!strcmp(what, "scroll")) *got = tb_scroll;

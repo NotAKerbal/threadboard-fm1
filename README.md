@@ -24,13 +24,14 @@ thread releases that key. New threads fill empty keys without moving others.
 | Flashing | A question, approval, response, plan or completed thread needs you |
 | Steady bright | Work is running |
 | Dim | Assigned, with nothing to handle right now |
+| Slowly breathing | Snoozed, with a gentle 4.5-second fade |
 | Off | Available |
 
 Pending questions take priority even when the agent keeps working. Completed
 threads keep flashing after you read them, until you settle them. A completed
 foreground run with active or pending background work is still waiting, not done;
 it stays steadily lit until that work finishes. Reading a question does not clear
-the pending request. Snoozed threads stay dim. If the bridge disconnects, the
+the pending request. Snoozed threads breathe until the snooze ends. If the bridge disconnects, the
 device stops showing live activity and displays that T3 is disconnected.
 
 Non-blocking questions still flash on Threadboard while the agent works. T3's
@@ -71,12 +72,16 @@ The physical PLAY/STOP key has PLAY above STOP and red illumination. It is in
 the bottom row of the button bank to the right of the screen, four buttons
 to the right of HOME, between SEQ and REC. This guide calls it PLAY.
 
-The screen shows the project, thread title, status and a short response preview.
-Select a finished thread to read an excerpt of its final response in a dedicated
-result view. K1 scrolls it; PLAY opens the full thread in T3; SAVE + its white key
-settles it. Reading the excerpt keeps the thread flashing. Excerpts use the
-agent's response directly, without another AI call. The desktop adapter currently
-shares up to 1,000 characters of each latest message; longer results remain in T3.
+The screen shows the project, thread title, status and the selected thread's
+latest message, including while work is running or stopped. K1 scrolls it.
+Finished threads show the latest saved assistant response from that run, even
+when a later user message exists. PLAY opens the full thread in T3; SAVE + its
+white key settles it. Reading the excerpt keeps the thread flashing. Excerpts
+use the agent's response directly, without another AI call, and show up to 1,200
+characters. Longer messages remain in T3. Both the local bridge and desktop
+adapter read saved thread messages because T3's thread list can omit them.
+Failed reads retry automatically; a previous run's result is never reused for a
+new run. Questions take priority over message previews.
 The other knobs are unused in this first version. A short two-note chime plays
 when a thread finishes or raises a new request, response, plan or failure needing attention.
 Repeated polls and reconnects do not replay the same notification. The initial
@@ -122,10 +127,10 @@ a small adapter for Nightly `0.1.3-nightly.20261025.3692`:
 
 1. Start Threadboard.
 2. Open T3's developer console with Command-Option-I and select Console.
-3. Review `bridge/desktop-adapter.js`. If DevTools shows its paste warning, clear
+3. Review `bridge/desktop-adapter.js` and `bridge/thread-messages.js`. If DevTools shows its paste warning, clear
    that warning yourself by typing `allow pasting` and pressing Enter.
 4. T3 blocks external script imports. The command in `output/install-desktop.txt`
-   verifies the reviewed adapter's SHA-256 hash, then loads it as an inline module.
+   verifies the reviewed adapter and message reader's combined SHA-256 hash, then loads them as an inline module.
    Review and approve this adapter before running the command: it bypasses that
    external-script restriction and can stop, settle and answer threads. Then
    run the command and close DevTools.

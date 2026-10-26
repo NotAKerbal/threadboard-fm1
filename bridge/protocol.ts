@@ -1,10 +1,10 @@
 import type { BoardAction, BoardView, LightState } from './types.ts';
 
-export const PROTOCOL_VERSION = 4;
+export const PROTOCOL_VERSION = 5;
 export const COMMAND = 0x70;
 export const MSG = { BEGIN: 0, SLOT: 1, COMMIT: 2, ACK: 3, ACTION: 4, HELLO: 5, QUESTION:6, RESULT:7 } as const;
 export const ACTION = { select: 0, next: 1, stop: 2, settle: 3, scroll: 4,choose:5,confirm:6,question:7,page:8 } as const;
-export const STATES: LightState[] = ['empty', 'idle', 'working', 'attention', 'unavailable'];
+export const STATES: LightState[] = ['empty', 'idle', 'working', 'attention', 'unavailable', 'snoozed'];
 export function pack7(bytes: Uint8Array): number[] {
   const result: number[] = []; let acc = 0; let bits = 0;
   for (const b of bytes) { acc |= b << bits; bits += 8; while (bits >= 7) { result.push(acc & 127); acc >>>= 7; bits -= 7; } }
@@ -46,7 +46,8 @@ export function snapshotFrames(view: BoardView, session: number): number[][] {
   if(q){question[0]=1|(q.multiSelect?2:0)|(q.canSubmit?4:0)|(q.submitted?8:0);question[1]=q.index;question[2]=q.total;question[3]=q.page;question[4]=q.pages;question[5]=q.answered;question.writeUInt32LE(q.token,6);}
   question[10]=qHeader.length;question[11]=qText.length;
   frames.push(frame(Buffer.concat([header(MSG.QUESTION,session,view.revision),question,qHeader,qText])));
-  const result=text(view.result?.threadId===view.slots[view.selected]?.threadId?view.result?.text??'':'',1200);
+  const excerpt=view.result??view.preview;
+  const result=text(excerpt?.threadId===view.slots[view.selected]?.threadId?excerpt?.text??'':'',1200);
   // Ordered chunks stay inside the FM-1's small SysEx receive buffer.
   for(let offset=0;offset<Math.max(1,result.length);offset+=240){
     const meta=Buffer.alloc(4);meta.writeUInt16LE(result.length,0);meta.writeUInt16LE(offset,2);

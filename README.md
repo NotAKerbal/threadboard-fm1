@@ -14,18 +14,22 @@ thread releases that key. New threads fill empty keys without moving others.
 | Off | Available |
 
 Pending questions take priority even when the agent keeps working. Completed
-threads keep flashing after you read them, until you settle them. A thread with
-ongoing background work stays steadily lit. Reading a question does not clear
+threads keep flashing after you read them, until you settle them. Queued
+background follow-ups do not hide a completed run's result. Reading a question does not clear
 the pending request. Snoozed threads stay dim. If the bridge disconnects, the
 device stops showing live activity and displays that T3 is disconnected.
+
+Non-blocking questions still flash on Threadboard while the agent works. T3's
+current sidebar may keep those threads under Working until the run stops.
 
 The 11 black keys choose answers for the selected thread. Single-choice answers
 advance to the next question; multi-select answers toggle in place. Nothing is
 sent until you press PLAY. Threads keep their white key while answering.
 
 K2 switches questions; K3 changes pages when there are more than 11 options.
-K1 scrolls the full question and labels on the device. Selected choices light
-brightly; other available choices stay dim. Questions requiring typed text and
+K1 scrolls the full question and labels on the device. Available option keys
+light at middle brightness; selected choices light at full brightness. Unused
+black keys stay off. Questions requiring typed text and
 approval requests stay in T3. Drafts stay in memory and reset if the request changes.
 An unconfirmed submission stays locked so a retry cannot send it twice.
 
@@ -46,6 +50,11 @@ An unconfirmed submission stays locked so a retry cannot send it twice.
 | MASTER | Chime volume, with mute at zero |
 
 The screen shows the project, thread title, status and a short response preview.
+Select a finished thread to read an excerpt of its final response in a dedicated
+result view. K1 scrolls it; PLAY opens the full thread in T3; SAVE + its white key
+settles it. Reading the excerpt keeps the thread flashing. Excerpts use the
+agent's response directly, without another AI call. The desktop adapter currently
+shares up to 1,000 characters of each latest message; longer results remain in T3.
 The other knobs are unused in this first version. A short two-note chime plays
 when a thread finishes or raises a new request, response, plan or failure needing attention.
 Repeated polls and reconnects do not replay the same notification. The initial

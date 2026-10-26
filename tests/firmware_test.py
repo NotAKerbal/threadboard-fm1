@@ -33,9 +33,15 @@ script+=inject(fixture['events'][1])+['wait 400','expect chimes 1','wavstop','wa
 script+=inject(fixture['events'][2])+['wait 400','expect chimes 2','wavstop','master 0','wav muted.wav']
 script+=inject(fixture['events'][3])+['wait 400','expect chimes 3','wavstop','master 2048','wav chime-half.wav']
 script+=inject(fixture['events'][4])+['wait 400','expect chimes 4','wavstop']
-script+=inject(fixture['questions'][0])+['wait 32','expect question 1','expect question_index 0','expect question_ready 0','tap PLAY','expect action 0','tapkey 1','expect action 5','expect action_token 1001','inject '+fixture['questionAcks'][0]]
+script+=inject(fixture['questions'][0])+['wait 32','expect question 1','expect question_index 0','expect question_ready 0','expect mid 10','tap PLAY','expect action 0','tapkey 1','expect action 5','expect action_token 1001','inject '+fixture['questionAcks'][0]]
 script+=inject(fixture['questions'][1])+['wait 32','expect question_index 1','expect answer1 0','tapkey 1','expect action 5','expect action_token 1002','inject '+fixture['questionAcks'][1]]
-script+=inject(fixture['questions'][2])+['wait 32','expect answer1 1','expect question_ready 1','shot question-choices.png','tap PLAY','expect action 6','expect action_token 1003','inject '+fixture['questionAcks'][2]]
+script+=inject(fixture['questions'][2])+['wait 32','expect answer1 1','expect answer_lights 2','expect question_ready 1','shot question-choices.png','tap PLAY','expect action 6','expect action_token 1003','inject '+fixture['questionAcks'][2]]
+# An incomplete or out-of-order result cannot replace the current screen.
+result=fixture['result'];first=fixture['firstResult']
+script+=inject(result[:first]+result[first+1:])+['wait 32','expect result_len 0','expect question 1']
+script+=inject(result)+['wait 32','expect result_len '+str(fixture['resultLength']),'expect question 0','expect mid 0','expect answer_lights 0','shot finished-result.png','spin K1 60','wait 32','expect scrolled 1','shot finished-result-end.png']
+script+=inject(result)+['wait 32','expect scrolled 1']
+script+=inject(fixture['resultClear'])+['wait 32','expect result_len 0','expect scroll 0']
 path=out/'scenario.tb';path.write_text('\n'.join(script)+'\n')
 expanded=[]
 for line in script:

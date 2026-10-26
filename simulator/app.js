@@ -34,10 +34,11 @@ function render(data) {
   if(selected){
     el('project').textContent=selected.project||'THREADBOARD';el('key-number').textContent=threadNumber(data.selected);
     el('thread-title').textContent=selected.threadId?selected.title:'This key is available';el('thread-state').textContent=data.connected?labels[selected.state].toUpperCase():'DISCONNECTED';
-    el('detail').textContent=data.connected?selected.detail:'Your assignments are preserved. Reconnect T3 to continue.';
+    el('detail').textContent=data.connected?(data.result?.text??selected.detail):'Your assignments are preserved. Reconnect T3 to continue.';
+    el('detail').parentElement.classList.toggle('has-result',!!data.result);
   }
   const need=data.slots.filter(s=>s.threadId&&s.state==='attention').length,working=data.slots.filter(s=>s.threadId&&s.state==='working').length;
-  el('summary').textContent=`${need} need you · ${working} working`;
+  el('summary').textContent=data.result?'RESULT EXCERPT · SCROLL TO READ':`${need} need you · ${working} working`;
   for(const slot of data.slots){const key=keys.get(slot.key),answer=black.includes(slot.key);key.dataset.state=slot.state;key.setAttribute('aria-pressed',String(answer?slot.status==='answer-selected':slot.key===data.selected));key.setAttribute('aria-label',answer?`Answer key ${black.indexOf(slot.key)+1}, ${slot.token?slot.title:'No question choice'}`:`Thread ${threadNumber(slot.key)}, ${names[slot.key]}, ${slot.title}, ${labels[slot.state]}`);key.title=answer?slot.title:`${threadNumber(slot.key)}: ${slot.title}`;key.disabled=busy||!data.connected||(answer&&(!slot.token||data.question?.submitted));}
   const q=data.question;el('question-panel').hidden=!q;el('send-answers').hidden=!q;el('send-answers').disabled=busy||!data.connected||!q?.canSubmit;
   if(q){

@@ -18,4 +18,7 @@ await board.act({action:'choose',key:1,token:board.view.question!.token});
 const q2=structuredClone(board.view);q2.question!.token=1002;for(const c of q2.question!.choices)q2.slots[c.key]!.token=1002;
 await board.act({action:'choose',key:1,token:board.view.question!.token});
 const ready=structuredClone(board.view);ready.question!.token=1003;for(const c of ready.question!.choices)ready.slots[c.key]!.token=1003;
-console.log(JSON.stringify({frames:frames.map(hex),malformed:hex(frame(malformed)),renewed:snapshotFrames(renewed,77).map(hex),events,questions:[q1,q2,ready].map(v=>snapshotFrames(v,88).map(hex)),questionAcks:[4,5,6].map(n=>hex(ackFrame(88,n,true))),ack3:hex(ackFrame(77,3,true)),ack1:hex(ackFrame(42,1,true)),wrongAck:hex(ackFrame(43,1,true)),ack2:hex(ackFrame(42,2,false))}));
+const finished=structuredClone(base);finished.revision=10;finished.result={threadId:'t2',text:'The implementation is complete. Tests passed. Review the changes before settling. '.repeat(14).slice(0,1000)};
+const resultFrames=snapshotFrames(finished,88);
+const firstResult=resultFrames.findIndex(f=>decodeFrame(f)![1]===7);
+console.log(JSON.stringify({frames:frames.map(hex),malformed:hex(frame(malformed)),renewed:snapshotFrames(renewed,77).map(hex),events,questions:[q1,q2,ready].map(v=>snapshotFrames(v,88).map(hex)),result:resultFrames.map(hex),firstResult,resultLength:finished.result.text.length,resultClear:snapshotFrames({...finished,result:null,revision:11},88).map(hex),questionAcks:[4,5,6].map(n=>hex(ackFrame(88,n,true))),ack3:hex(ackFrame(77,3,true)),ack1:hex(ackFrame(42,1,true)),wrongAck:hex(ackFrame(43,1,true)),ack2:hex(ackFrame(42,2,false))}));

@@ -31,7 +31,8 @@ try {
   await page.getByRole('button',{name:'Finished',exact:true}).click();
   await page.waitForFunction(()=>document.querySelector('#thread-state').textContent==='NEEDS YOU');
   await page.locator(`.thread-key[data-key="${question.key}"]`).click();
-  await page.waitForFunction(()=>document.querySelector('#detail').textContent.startsWith('Done, awaiting settlement'));
+  await page.waitForFunction(()=>document.querySelector('#detail').textContent.startsWith('The work is ready for you to review.'));
+  assert.equal(await page.locator('#summary').textContent(),'RESULT EXCERPT · SCROLL TO READ');
   await page.getByRole('button',{name:'Settle thread'}).click();
   await page.waitForFunction(key=>document.querySelector(`.thread-key[data-key="${key}"]`).dataset.state==='empty',question.key);
   state=await page.request.get(base+'/api/state').then(r=>r.json());assert.equal(state.slots[question.key].threadId,null);

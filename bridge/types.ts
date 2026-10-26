@@ -71,6 +71,7 @@ export interface Slot {
   machine?: string;
 }
 export interface BoardView {
+  result?: { threadId: string; text: string } | null;
   question?: QuestionView | null;
   environmentId: string;
   connected: boolean;
@@ -96,11 +97,12 @@ export function lightState(t: Thread, now = Date.now()): { state: LightState; re
     return { state: 'attention', reason: /approv|permission/.test(t.pendingRuntimeRequest.kind) ? 'Approval waiting' : 'Question waiting' };
   }
   if (t.pendingGuestMessageCount) return { state: 'attention', reason: 'Guest message waiting' };
+  // Queued follow-ups do not hide a completed run's result from the user.
+  if (t.status === 'completed') return { state: 'attention', reason: 'Done, awaiting settlement' };
   if (WORKING.has(t.status) || (t.activityRunStatus && WORKING.has(t.activityRunStatus)) || t.pendingBackgroundTasks?.length) {
     return { state: 'working', reason: t.blockedOnThreadWait ? 'Waiting for agents' : 'Working' };
   }
   if (t.hasActionableProposedPlan) return { state: 'attention', reason: 'Plan ready for review' };
-  if (t.status === 'completed') return { state: 'attention', reason: 'Done, awaiting settlement' };
   const visited = Date.parse(t.lastVisitedAt ?? '') || 0;
   if (t.status === 'failed' && (Date.parse(t.latestRunCompletedAt ?? t.updatedAt) || 0) > visited) {
     return { state: 'attention', reason: 'Run failed' };

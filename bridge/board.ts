@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { Bindings } from './bindings.ts';
 import { demoSnapshot,demoQuestion } from './demo.ts';
 import { Questions } from './questions.ts';
+import { resultExcerpt } from './result.ts';
 import { KEY_COUNT, WORKING, THREAD_KEYS } from './types.ts';
 import type { BoardAction, BoardView, ShellSnapshot, ThreadSource } from './types.ts';
 
@@ -36,10 +37,12 @@ export class Board extends EventEmitter {
       if (this.bindings?.saved.environmentId !== environmentId) this.bindings = new Bindings(this.demo ? null : join(this.stateDir, `bindings-${environmentId}.json`), environmentId);
       const { slots, overflow } = this.bindings.reconcile(snapshot);
       const selected=slots[this.bindings.saved.selected];
-      const question=this.questions.view(snapshot.threads.find(t=>t.id===selected?.threadId),slots);
+      const thread=snapshot.threads.find(t=>t.id===selected?.threadId);
+      const question=this.questions.view(thread,slots);
+      const result=thread&&thread.status==='completed'&&selected?.state==='attention'&&!question&&!thread.pendingRuntimeRequest ? {threadId:thread.id,text:resultExcerpt(thread)} : null;
       this.snapshot = snapshot;
       const connected = !snapshot.environments || snapshot.environments.some(e => e.connected);
-      Object.assign(this.view, { environmentId, connected, error: connected ? null : 'All T3 machines are disconnected. Assignments are preserved.', selected: this.bindings.saved.selected, slots, overflow, environments: snapshot.environments,question });
+      Object.assign(this.view, { environmentId, connected, error: connected ? null : 'All T3 machines are disconnected. Assignments are preserved.', selected: this.bindings.saved.selected, slots, overflow, environments: snapshot.environments,question,result });
     } catch (e) {
       this.view.connected = false;
       this.view.error = e instanceof Error ? e.message : 'Could not read T3 threads';

@@ -1,6 +1,19 @@
+<img src="docs/assets/threadboard-icon.png" width="72" height="72" alt="Threadboard's three-key T icon">
+
 # Threadboard
 
+**Your threads, at hand.**
+
 Turn an M-VAVE FM-1 into a physical console for your T3 Code threads.
+
+![Concept illustration of selecting a thread on the cream FM-1, with a guide to its key lights.](docs/assets/select-thread.png)
+
+*Interaction concept based on the physical board. Screen layouts are illustrative;
+amber marks highlight controls, not hardware LED colors.*
+
+Connect directly to your running T3 Code installation. [Set up Threadboard](#run-it),
+follow the [illustrated interaction guide](docs/interactions.md), or see the
+[brand and icon assets](docs/branding.md).
 
 Each active, top-level thread gets one of the 16 white keys. Its key stays fixed
 through new runs, completion, app restarts and USB reconnects. Settling the
@@ -33,6 +46,10 @@ light at middle brightness; selected choices light at full brightness. Unused
 black keys stay off. Questions requiring typed text and
 approval requests stay in T3. Drafts stay in memory and reset if the request changes.
 An unconfirmed submission stays locked so a retry cannot send it twice.
+
+![Concept illustration of choosing an answer with an upper key, then pressing PLAY to send.](docs/assets/answer-question.png)
+
+*Choose first, then send. Typed answers and approvals stay in T3 Code.*
 
 ## Controls
 
@@ -68,22 +85,14 @@ orchestration protocol 2. Tested against T3 Code Nightly
 `0.1.3-nightly.20261025.3692`.
 
 The repository contains source, without prebuilt firmware or personal state.
-Try the simulator first; it needs no FM-1 or T3 connection:
+Start with your running T3 Code installation and an FM-1 running Threadboard
+firmware. Follow **Install on the FM-1** below if the device still needs firmware.
+Install Apple's command line developer tools for `swiftc`, then run:
 
 ```sh
 git clone https://github.com/NotAKerbal/threadboard-fm1.git
 cd threadboard-fm1
 npm ci
-npm run demo
-```
-
-Open **http://127.0.0.1:4782**. Demo actions do not affect T3. The controls let
-you make a thread work, ask a question, finish, open it and settle it.
-
-For live T3 threads and an FM-1 already running Threadboard firmware, install
-Apple's command line developer tools for `swiftc`, then run:
-
-```sh
 npm run build:midi
 node scripts/build-desktop.mjs
 npm start

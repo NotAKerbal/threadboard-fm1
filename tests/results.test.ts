@@ -2,14 +2,26 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Board } from '../bridge/board.ts';
 
-test('completed threads with queued follow-up tasks still flash and expose their finished result', async () => {
+test('a completed foreground run still waiting for background work is not a done thread', async () => {
   const board=new Board(null,'unused',true);await board.refresh();
   const slot=board.view.slots.find(s=>s.status==='completed')!;
   const thread=board.snapshot!.threads.find(t=>t.id===slot.threadId)!;
+  const result=()=>board.view.result;
   thread.pendingBackgroundTasks=[{}];
   await board.act({action:'select',key:slot.key,token:slot.token});
+  assert.equal(board.view.slots[slot.key]!.state,'working');
+  assert(board.view.slots[slot.key]!.detail.startsWith('Waiting for work to finish'));
+  assert.equal(result(),null);
+  thread.pendingBackgroundTasks=[];
+  await board.refresh();
   assert.equal(board.view.slots[slot.key]!.state,'attention');
-  assert.equal(board.view.result?.threadId,thread.id);
+  assert.equal(result()?.threadId,thread.id);
+  thread.activityRunStatus='waiting';
+  await board.refresh();
+  assert.equal(board.view.slots[slot.key]!.state,'working');assert.equal(result(),null);
+  thread.activityRunStatus=null;thread.activeRunId='still-active';
+  await board.refresh();
+  assert.equal(board.view.slots[slot.key]!.state,'working');assert.equal(result(),null);
 });
 
 test('finished results are readable after visits, preserve filenames, and clear on settlement', async () => {

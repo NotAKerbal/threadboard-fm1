@@ -4,7 +4,7 @@ import { Bindings } from './bindings.ts';
 import { demoSnapshot,demoQuestion } from './demo.ts';
 import { Questions } from './questions.ts';
 import { resultExcerpt } from './result.ts';
-import { KEY_COUNT, WORKING, THREAD_KEYS } from './types.ts';
+import { KEY_COUNT, WORKING, THREAD_KEYS, isDone } from './types.ts';
 import type { BoardAction, BoardView, ShellSnapshot, ThreadSource } from './types.ts';
 
 export class Board extends EventEmitter {
@@ -39,7 +39,7 @@ export class Board extends EventEmitter {
       const selected=slots[this.bindings.saved.selected];
       const thread=snapshot.threads.find(t=>t.id===selected?.threadId);
       const question=this.questions.view(thread,slots);
-      const result=thread&&thread.status==='completed'&&selected?.state==='attention'&&!question&&!thread.pendingRuntimeRequest ? {threadId:thread.id,text:resultExcerpt(thread)} : null;
+      const result=thread&&isDone(thread)&&selected?.state==='attention'&&!question&&!thread.pendingRuntimeRequest ? {threadId:thread.id,text:resultExcerpt(thread)} : null;
       this.snapshot = snapshot;
       const connected = !snapshot.environments || snapshot.environments.some(e => e.connected);
       Object.assign(this.view, { environmentId, connected, error: connected ? null : 'All T3 machines are disconnected. Assignments are preserved.', selected: this.bindings.saved.selected, slots, overflow, environments: snapshot.environments,question,result });

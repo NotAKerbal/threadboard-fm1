@@ -86,6 +86,9 @@ export interface BoardView {
 export type ActionName = 'select' | 'next' | 'stop' | 'settle' | 'scroll' | 'choose' | 'confirm' | 'question' | 'page';
 export interface BoardAction { action: ActionName; key: number; token: number; value?: number }
 export const WORKING = new Set(['preparing', 'queued', 'starting', 'running', 'waiting']);
+export function isDone(t: Thread): boolean {
+  return t.status === 'completed' && !t.activeRunId && !t.pendingBackgroundTasks?.length && !(t.activityRunStatus && WORKING.has(t.activityRunStatus));
+}
 export function isActive(t: Thread): boolean {
   return t.settledOverride !== 'settled' && !t.archivedAt && !t.deletedAt && t.lineage.relationshipToParent !== 'subagent';
 }
@@ -97,12 +100,12 @@ export function lightState(t: Thread, now = Date.now()): { state: LightState; re
     return { state: 'attention', reason: /approv|permission/.test(t.pendingRuntimeRequest.kind) ? 'Approval waiting' : 'Question waiting' };
   }
   if (t.pendingGuestMessageCount) return { state: 'attention', reason: 'Guest message waiting' };
-  // Queued follow-ups do not hide a completed run's result from the user.
-  if (t.status === 'completed') return { state: 'attention', reason: 'Done, awaiting settlement' };
-  if (WORKING.has(t.status) || (t.activityRunStatus && WORKING.has(t.activityRunStatus)) || t.pendingBackgroundTasks?.length) {
-    return { state: 'working', reason: t.blockedOnThreadWait ? 'Waiting for agents' : 'Working' };
+  if (WORKING.has(t.status) || t.activeRunId || (t.activityRunStatus && WORKING.has(t.activityRunStatus)) || t.pendingBackgroundTasks?.length) {
+    const waiting=t.blockedOnThreadWait||t.pendingBackgroundTasks?.length||t.status==='waiting'||t.activityRunStatus==='waiting';
+    return { state: 'working', reason: waiting ? 'Waiting for work to finish' : 'Working' };
   }
   if (t.hasActionableProposedPlan) return { state: 'attention', reason: 'Plan ready for review' };
+  if (isDone(t)) return { state: 'attention', reason: 'Done, awaiting settlement' };
   const visited = Date.parse(t.lastVisitedAt ?? '') || 0;
   if (t.status === 'failed' && (Date.parse(t.latestRunCompletedAt ?? t.updatedAt) || 0) > visited) {
     return { state: 'attention', reason: 'Run failed' };

@@ -14,8 +14,9 @@ thread releases that key. New threads fill empty keys without moving others.
 | Off | Available |
 
 Pending questions take priority even when the agent keeps working. Completed
-threads keep flashing after you read them, until you settle them. Queued
-background follow-ups do not hide a completed run's result. Reading a question does not clear
+threads keep flashing after you read them, until you settle them. A completed
+foreground run with active or pending background work is still waiting, not done;
+it stays steadily lit until that work finishes. Reading a question does not clear
 the pending request. Snoozed threads stay dim. If the bridge disconnects, the
 device stops showing live activity and displays that T3 is disconnected.
 

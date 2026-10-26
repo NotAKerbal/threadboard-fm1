@@ -2,7 +2,8 @@
 
 <img src="assets/threadboard-icon.png" width="128" height="128" alt="Threadboard's three rounded keys forming a T">
 
-**Threadboard**  
+**Threadboard**
+
 Your threads, at hand.
 
 The mark forms a T from three rounded keys. Its charcoal keycaps and warm

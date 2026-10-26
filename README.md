@@ -47,7 +47,7 @@ black keys stay off. Questions requiring typed text and
 approval requests stay in T3. Drafts stay in memory and reset if the request changes.
 An unconfirmed submission stays locked so a retry cannot send it twice.
 
-![Concept illustration of choosing an answer with an upper key, then pressing PLAY to send.](docs/assets/answer-question-play-v2.png)
+![Concept illustration of choosing an answer with an upper key, then pressing PLAY to send.](docs/assets/answer-question-play-stop.png)
 
 *Choose first, then send. Typed answers and approvals stay in T3 Code.*
 
@@ -67,8 +67,9 @@ An unconfirmed submission stays locked so a retry cannot send it twice.
 | HOME | Show the control reference |
 | MASTER | Chime volume, with mute at zero |
 
-PLAY is in the bottom row of the button bank to the right of the screen,
-four buttons to the right of HOME and second from the right edge.
+The physical PLAY/STOP key has PLAY above STOP and red illumination. It is in
+the bottom row of the button bank to the right of the screen, four buttons
+to the right of HOME, between SEQ and REC. This guide calls it PLAY.
 
 The screen shows the project, thread title, status and a short response preview.
 Select a finished thread to read an excerpt of its final response in a dedicated

@@ -31,13 +31,18 @@ brightness and flashing, as described in the [interaction guide](interactions.md
 | --- | --- |
 | [Transparent icon](assets/threadboard-icon.png) | Project icon and document headers |
 | [Select a thread](assets/select-thread.png) | README overview and thread selection |
-| [Answer a question](assets/answer-question-play-v2.png) | Answer choices and explicit PLAY submission |
+| [Answer a question](assets/answer-question-play-stop.png) | Answer choices and explicit PLAY submission |
 | [Review a result](assets/review-result.png) | Result scrolling and SAVE plus thread-key settling |
 
 The illustrations are concepts based on Isaac's scanned board, with illustrative
 screen layouts. Keep their concept label and a caption when reusing them. They
 show interactions with T3 Code directly.
 
+The answer illustration also follows the [official FM-1 product photo](https://www.sincoaudio.com/images/productInfo/fm-1-1.webp)
+for the function-key labels. PLAY/STOP is one key with stacked lettering,
+between SEQ and REC. Its red illumination follows Isaac's physical unit.
+
 Created with the built-in Image Generation tool. The [generation prompts](branding-prompts.txt)
-are included for future revisions. The original scan is a reference only and
-is not bundled in this repository.
+and [PLAY/STOP correction prompt](play-stop-edit-prompt.txt) are included for
+future revisions. The original scan is a reference only and is not bundled
+in this repository.

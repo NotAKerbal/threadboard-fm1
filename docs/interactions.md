@@ -29,10 +29,13 @@ the selected thread's work, including delegated work.
 
 ## Answer a question
 
-![Choosing an answer with an upper key, then pressing PLAY in the bottom row of the right-hand button bank.](assets/answer-question-play-v2.png)
+![Choosing an answer with an upper key, then pressing PLAY in the bottom row of the right-hand button bank.](assets/answer-question-play-stop.png)
 
-PLAY is four buttons to the right of HOME in the bottom row of the button bank
-to the right of the screen. It is second from the right edge.
+The physical key reads **PLAY** above **STOP**, with red illumination. It is
+four buttons to the right of HOME in the bottom row of the right-hand button
+bank, between SEQ and REC. This guide calls it PLAY. The [manufacturer's product
+photo](https://www.sincoaudio.com/images/productInfo/fm-1-1.webp) shows the labels
+and positions; the red illumination follows Isaac's physical unit.
 
 1. Select the thread asking the question.
 2. Press a black key for the corresponding answer. A single choice advances

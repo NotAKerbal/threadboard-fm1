@@ -41,7 +41,7 @@ export function makeServer(board: Board, demo: boolean, desktopSource?: DesktopS
         if(req.method==='GET'&&path==='/desktop/adapter.js'){
           const reader=await readFile(fileURLToPath(new URL('./thread-messages.js',import.meta.url)),'utf8');
           const adapter=await readFile(fileURLToPath(new URL('./desktop-adapter.js',import.meta.url)),'utf8');
-          res.writeHead(200,{'content-type':'text/javascript'});res.end(reader+'\n'+adapter.replace("import {createMessageReader} from './thread-messages.js';",''));return;
+          res.writeHead(200,{'content-type':'text/javascript'});res.end(reader+'\n'+adapter.replace("import {createMessageReader,approvalQuestion} from './thread-messages.js';",''));return;
         }
         if(req.method==='POST'&&path==='/desktop/attach'){json(res,200,{token:desktop.token});return;}
         if(req.method==='POST'&&path==='/desktop/snapshot'&&req.headers['x-threadboard-desktop']===desktop.token){

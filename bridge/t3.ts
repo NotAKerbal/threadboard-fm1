@@ -4,7 +4,8 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { randomUUID } from 'node:crypto';
-import type { ShellSnapshot } from './types.ts';
+import type { ShellSnapshot, Thread } from './types.ts';
+import { questionRequest, validAnswers } from './desktop-adapter.js';
 import { createMessageReader } from './thread-messages.js';
 
 const run = promisify(execFile);
@@ -74,6 +75,11 @@ export class T3Client {
     await this.readMessages(data.threads);
     return data;
   }
+  async readThread(thread: Thread): Promise<void> {
+    if (!thread.pendingRuntimeRequest) return;
+    try { thread.questionRequest = questionRequest(await this.request(`/api/orchestration/threads/${encodeURIComponent(thread.id)}`), thread.pendingRuntimeRequest.id); }
+    catch { thread.questionRequest = null; }
+  }
   private disconnect(): void {
     if (this.ping) clearInterval(this.ping);
     this.ping = null;
@@ -119,6 +125,12 @@ export class T3Client {
   }
   async dispatch(command: Record<string, unknown>): Promise<void> {
     await this.ensureSession();
+    if (command.type === 'runtime-request.respond') {
+      const fresh = questionRequest(await this.request(`/api/orchestration/threads/${encodeURIComponent(String(command.threadId))}`), String(command.requestId));
+      if (!fresh || JSON.stringify(fresh) !== command.questionSignature || !validAnswers(fresh, fresh.kind === 'approval' ? {decision: command.decision} : command.answers)) throw new Error('This T3 request changed before submission.');
+      const {questionSignature, ...input} = command;
+      command = input;
+    }
     const ws = await this.connectRpc();
     const id = String(++this.nextId);
     await new Promise<unknown>((resolve, reject) => {

@@ -7,6 +7,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { setTimeout as delay } from 'node:timers/promises';
 import { HistorySource, savedThread, shellQuote } from './history.ts';
+import { validAnswers } from './desktop-adapter.js';
 import { answerPath, claudeLiveDir, digest, liveStates, ownerAlive, prepareClaudeHooks, readState, sessionPath, writeExclusive } from './claude-live.ts';
 import type { IntegrationStatus, ShellSnapshot, Thread } from './types.ts';
 
@@ -39,7 +40,7 @@ export class ClaudeSource extends HistorySource {
   constructor(home: string, stateDir: string, cli = 'claude') { super('claude', home, stateDir); this.home = home; this.stateDir = stateDir; this.liveDir = claudeLiveDir(stateDir, home); this.cli = cli; }
   override get capabilities() { return { stop: this.nativeAvailable && this.native.some(s => s.kind === 'background' && ['working', 'blocked'].includes(s.state ?? '')), answer: true }; }
   get integration(): IntegrationStatus {
-    return { mode: this.tracked || this.native.length ? 'live' : 'hooks', detail: this.native.length ? 'Live status from Claude agent view. REC stops background sessions. Resume with tracking for streaming previews and choice answers. Approvals stay in Claude.' : this.tracked ? `${this.tracked} Claude session${this.tracked === 1 ? '' : 's'} tracked live. Answer choice questions here; use Claude to stop foreground work or approve permissions.` : 'Resume a thread with the command below, or start Claude with live tracking. Existing settings stay in place.', setupCommand: `CLAUDE_CONFIG_DIR=${shellQuote(this.home)} ${shellQuote(this.cli)} --settings ${shellQuote(this.settings)}` };
+    return { mode: this.tracked || this.native.length ? 'live' : 'hooks', detail: this.native.length ? 'Live status from Claude agent view. REC stops background sessions. Resume with tracking for streaming previews and choice answers. Permission approvals are available with live tracking.' : this.tracked ? `${this.tracked} Claude session${this.tracked === 1 ? '' : 's'} tracked live. Answer choice questions and permission requests here; use Claude to stop foreground work.` : 'Resume a thread with the command below, or start Claude with live tracking. Existing settings stay in place.', setupCommand: `CLAUDE_CONFIG_DIR=${shellQuote(this.home)} ${shellQuote(this.cli)} --settings ${shellQuote(this.settings)}` };
   }
   private async sessions(): Promise<NativeSession[] | null> {
     try {
@@ -214,12 +215,14 @@ export class ClaudeSource extends HistorySource {
     const pending = state?.pending;
     if (!state || !ownerAlive(state.ownerPid) || !pending || !ownerAlive(pending.hookPid) || pending.expiresAt <= Date.now() || pending.request.id !== command.requestId || JSON.stringify(pending.request) !== command.questionSignature) throw new Error('This Claude question is no longer available.');
     const answers = command.answers as Record<string, string | string[]>;
-    for (const question of pending.request.questions) {
+    if (pending.request.kind === 'approval') {
+      if (!validAnswers(pending.request,{decision:command.decision})) throw new Error('Invalid Claude approval.');
+    } else for (const question of pending.request.questions) {
       const value = answers[question.id], values = Array.isArray(value) ? value : [value];
       if (!values.length || values.some(v => typeof v !== 'string' || !question.options.some(o => o.label === v))) throw new Error('Invalid Claude answer.');
     }
     await mkdir(join(this.liveDir, 'answers'), { recursive: true, mode: 0o700 });
-    await writeExclusive(answerPath(this.liveDir, pending.request.id), { requestId: pending.request.id, runId: state.runId, signature: command.questionSignature, answers });
+    await writeExclusive(answerPath(this.liveDir, pending.request.id), { requestId: pending.request.id, runId: state.runId, signature: command.questionSignature, ...pending.request.kind==='approval'?{decision:command.decision}:{answers} });
     const deadline = Date.now() + 5000;
     while (Date.now() < deadline) {
       try {
@@ -228,7 +231,7 @@ export class ClaudeSource extends HistorySource {
       } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
       await delay(50);
     }
-    throw new Error('Claude did not confirm the answer. Check the provider before retrying.');
+    throw new Error('Claude did not confirm the response. Check the provider before retrying.');
   }
   override async close(): Promise<void> {
     this.watcher?.close(); this.watcher = null;

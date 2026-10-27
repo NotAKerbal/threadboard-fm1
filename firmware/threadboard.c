@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: MIT */
 #include "fastmath.h"
-#define TB_VERSION 5u
+#define TB_VERSION 6u
 #define TB_CMD 0x70u
 #define TB_ALL_KEYS ((1u << NKEYS) - 1u)
 #define TB_THREAD_KEYS 0x05ad5ad5u
@@ -43,7 +43,7 @@ static void tb_wr32(uint8_t *p, uint32_t n)
 static void tb_copy(char *out, const uint8_t *in, uint32_t n)
 {
     uint32_t i;
-    for (i = 0; i < n; i++) out[i] = in[i] >= 32u && in[i] <= 126u ? (char)in[i] : ' ';
+    for (i = 0; i < n; i++) out[i] = ((in[i] >= 32u && in[i] <= 126u) || in[i] == '\n') ? (char)in[i] : ' ';
     out[n] = 0;
 }
 static uint32_t tb_len(const char *s) { uint32_t n = 0; while (s[n]) n++; return n; }
@@ -127,7 +127,7 @@ void app_usb_cmd(const uint8_t *raw, uint32_t n)
         tb_mask |= 1u << key;
     } else if (b[1] == TB_QUESTION && len >= 22u) {
         uint32_t h=b[20],t=b[21];
-        if(h>30u||t>240u||len!=22u+h+t||b[10]>15u||((b[10]&1u)&&(!b[12]||b[11]>=b[12]||!b[14]||b[13]>=b[14]||!tb_rd32(b+16))))return;
+        if(h>30u||t>240u||len!=22u+h+t||b[10]>31u||((b[10]&1u)&&(!b[12]||b[11]>=b[12]||!b[14]||b[13]>=b[14]||!tb_rd32(b+16))))return;
         tb_stage_question.flags=b[10];tb_stage_question.index=b[11];tb_stage_question.total=b[12];tb_stage_question.page=b[13];tb_stage_question.pages=b[14];tb_stage_question.answered=b[15];tb_stage_question.token=tb_rd32(b+16);
         tb_copy(tb_stage_question.header,b+22,h);tb_copy(tb_stage_question.text,b+22+h,t);tb_question_received=1;
     } else if (b[1] == TB_RESULT && len >= 14u && len <= 254u) {
@@ -224,6 +224,23 @@ static uint32_t tb_wrap(const char *text, char lines[][40], uint32_t limit, cons
     }
     return line;
 }
+// Keep command whitespace and line breaks intact while reviewing an approval.
+static uint32_t tb_wrap_approval(const char *text, char lines[][40], uint32_t limit)
+{
+    uint32_t line = 0;
+    while (*text && line < limit) {
+        uint32_t at = 0;
+        while (text[at] && text[at] != '\n' && at < 38u) {
+            lines[line][at] = text[at]; lines[line][at + 1u] = 0;
+            if (text_w(&FONT_XS, lines[line]) > 220) break;
+            at++;
+        }
+        lines[line][at] = 0; text += at;
+        if (*text == '\n') text++;
+        line++;
+    }
+    return line;
+}
 static void tb_draw(void)
 {
     tb_slot_t *slot = &tb_slots[tb_selected];
@@ -236,11 +253,11 @@ static void tb_draw(void)
     n_detail = tb_wrap(slot->detail, detail, 12, &FONT_S);
     if(tb_question.flags&1u){
         uint32_t option=0;char label[100];
-        question_n=tb_wrap(tb_question.text,question_lines,8,&FONT_XS);
+        question_n=(tb_question.flags&16u)?tb_wrap_approval(tb_result,question_lines,48u):tb_wrap(tb_question.text,question_lines,8u,&FONT_XS);
         for(i=0;i<NKEYS;i++)if(!(TB_THREAD_KEYS&(1u<<i))){
             option++;if(!tb_slots[i].token)continue;
             label[0]=0;tb_number(option,part);tb_append(label,part,sizeof label);tb_append(label,tb_slots[i].state==TB_ATTENTION?" [x] ":" [ ] ",sizeof label);tb_append(label,tb_slots[i].title,sizeof label);
-            if(question_n<41u)question_n+=tb_wrap(label,&question_lines[question_n],3,&FONT_XS);
+            if(question_n<((tb_question.flags&16u)?61u:41u))question_n+=tb_wrap(label,&question_lines[question_n],3,&FONT_XS);
         }
     }
     if(result_on)question_n=tb_wrap(tb_result,question_lines,64,&FONT_XS);
@@ -267,7 +284,7 @@ static void tb_draw(void)
         } else if(tb_question.flags&1u){
             cv_text(10,y+28,&FONT_XS,tb_question.header,C_HI);
             for(i=0;i<10u&&i+(uint32_t)tb_scroll<question_n;i++)cv_text(10,y+44+(int32_t)i*14,&FONT_XS,question_lines[i+(uint32_t)tb_scroll],C_WHITE);
-            cv_text(10,y+188,&FONT_XS,tb_question.flags&8u?"SENT. WAIT FOR T3":tb_question.flags&4u?"PLAY: SEND ANSWERS":"BLACK: CHOOSE / K2: QUESTION",C_HI);
+            cv_text(10,y+188,&FONT_XS,tb_question.flags&8u?"SENT. WAIT FOR PROVIDER":tb_question.flags&4u?(tb_question.flags&16u)?"PLAY: CONFIRM DECISION":"PLAY: SEND ANSWERS":(tb_question.flags&16u)?"BLACK: CHOOSE / K1: REVIEW":"BLACK: CHOOSE / K2: QUESTION",C_HI);
             tb_number(tb_question.index+1u,part);cv_text(10,y+202,&FONT_XS,part,C_GRAY);cv_text(30,y+202,&FONT_XS,"K1: SCROLL  K3: PAGE",C_GRAY);
         } else if(result_on){
             cv_text(10,y+28,&FONT_XS,slot->project,C_GRAY);
@@ -401,6 +418,7 @@ int app_expect(const char *what, int *got)
     else if (!strcmp(what, "action_token")) *got = (int)tb_last_token;
     else if (!strcmp(what, "pending")) *got = tb_pending_on;
     else if (!strcmp(what, "chimes")) *got = (int)tb_chime_requested;
+    else if (!strcmp(what, "approval")) *got = (tb_question.flags&16u)!=0;
     else if (!strcmp(what, "question")) *got = (tb_question.flags&1u)!=0;
     else if (!strcmp(what, "question_token")) *got = (int)tb_question.token;
     else if (!strcmp(what, "question_index")) *got = tb_question.index;

@@ -32,7 +32,7 @@ function render(data) {
   view=data;document.body.classList.toggle('loading',!data.slots.length&&!data.error);document.body.classList.toggle('disconnected',!data.connected);
   const provider=providerLabels[data.provider]??'T3 Code', history=data.provider&&data.provider!=='t3';
   el('source-label').textContent=`FM-1 × ${provider.toUpperCase()}`;
-  el('intro').textContent=history?(data.integration?.mode==='live'?'White keys select threads. Black keys choose answers and PLAY sends them. Approvals stay in the provider.':'White keys select saved threads. Resume a thread with live tracking using the command below.'):'White keys keep your threads. Black keys choose answers for the selected thread. PLAY sends them.';
+  el('intro').textContent=history?(data.integration?.mode==='live'?'White keys select threads. Black keys choose answers and PLAY sends them. Black keys also choose approvals.':'White keys select saved threads. Resume a thread with live tracking using the command below.'):'White keys keep your threads. Black keys choose answers for the selected thread. PLAY sends them.';
   const machines=data.environments??[], online=machines.filter(e=>e.connected).length;
   el('connection').textContent=data.demo?'Demo mode':machines.length>1?`${online}/${machines.length} machines connected`:data.connected?(history?`${provider} ${data.integration?.mode==='live'?'live':'history'}`:`${provider} connected`):`${provider} disconnected`;
   el('connection').title=machines.map(e=>`${e.label}: ${e.connected?'connected':e.error??'disconnected'}`).join('\n');
@@ -54,8 +54,11 @@ function render(data) {
   for(const slot of data.slots){const key=keys.get(slot.key),answer=black.includes(slot.key);key.dataset.state=slot.state;key.setAttribute('aria-pressed',String(answer?slot.status==='answer-selected':slot.key===data.selected));key.setAttribute('aria-label',answer?`Answer key ${black.indexOf(slot.key)+1}, ${slot.token?slot.title:'No question choice'}`:`Thread ${threadNumber(slot.key)}, ${names[slot.key]}, ${slot.title}, ${labels[slot.state]}`);key.title=answer?slot.title:`${threadNumber(slot.key)}: ${slot.title}`;key.disabled=busy||!data.connected||(answer&&(!slot.token||data.question?.submitted));}
   const q=data.question;el('question-panel').hidden=!q;el('send-answers').hidden=!q;el('send-answers').disabled=busy||!data.connected||!q?.canSubmit;
   if(q){
-    el('question-progress').textContent=`Question ${q.index+1} of ${q.total} · ${q.answered} answered${q.pages>1?` · Options page ${q.page+1}/${q.pages}`:''}`;
+    el('send-answers').textContent=q.kind==='approval'?'PLAY · Confirm decision':'PLAY · Send answers';
+    el('answer-help').textContent=q.kind==='approval'?'Choose an approval decision, then press PLAY to confirm. Nothing is approved by selecting a thread.':`Black keys choose or toggle these answers. PLAY sends the completed answers. Use ${provider} for a custom answer.`;
+    el('question-progress').textContent=q.kind==='approval'?(q.submitted?'Decision sent. Waiting for the provider.':'Review the request, then choose a decision.'):`Question ${q.index+1} of ${q.total} · ${q.answered} answered${q.pages>1?` · Options page ${q.page+1}/${q.pages}`:''}`;
     el('question-title').textContent=q.header;el('question-text').textContent=q.text;
+    el('question-prev').hidden=el('question-next').hidden=q.total<2;
     el('question-prev').disabled=el('question-next').disabled=busy||q.submitted||q.total<2;
     el('page-prev').hidden=el('page-next').hidden=q.pages<2;el('page-prev').disabled=el('page-next').disabled=busy||q.submitted;
     el('answer-options').replaceChildren();
@@ -63,7 +66,7 @@ function render(data) {
       const button=document.createElement('button');button.type='button';button.className='answer-option';button.dataset.key=c.key;button.setAttribute('aria-pressed',String(c.selected));button.disabled=busy||q.submitted||!data.connected;button.addEventListener('click',()=>act('choose',c.key));
       const label=document.createElement('span');label.textContent=`${n+1}. ${c.label}`;const description=document.createElement('small');description.textContent=c.description;button.append(label,description);el('answer-options').append(button);
     }
-    if(!q.choices.length)el('answer-options').textContent=`This question needs a typed answer in ${provider}.`;
+    if(!q.choices.length)el('answer-options').textContent=`${q.kind==='approval'?'Review this approval':'Answer this question'} in ${provider}.`;
   }
   el('next').disabled=busy||!data.connected||!need;el('stop').hidden=data.capabilities?.stop===false;el('stop').disabled=busy||!data.connected||!selected?.threadId||!(selected.state==='working'||['preparing','queued','starting','running','waiting'].includes(selected.status));
   el('settle').disabled=busy||!data.connected||!selected?.threadId||selected.state==='unavailable';

@@ -25,7 +25,7 @@ manifest={
     'name':'Threadboard','version':'0.1.0','device':'M-VAVE FM-1','identity':'FM-1_98700',
     'fm1_base':subprocess.check_output(['git','-C',str(root/'vendor/fm1-base'),'rev-parse','HEAD'],text=True).strip(),
     'bsp':subprocess.check_output(['git','-C',str(root/'vendor/fm1-base/bsp'),'rev-parse','HEAD'],text=True).strip(),
-    't3_protocol':2,'wire_protocol':5,
+    't3_protocol':2,'wire_protocol':6,
     'files':{p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in [out/'threadboard.fwsc',out/'threadboard-midi',out/'stock-FM-1_015.fwsc']},
 }
 (out/'manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')

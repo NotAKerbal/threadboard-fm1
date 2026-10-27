@@ -1,6 +1,8 @@
 import { basename } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { HistorySource, savedThread, shellQuote } from './history.ts';
+import { approvalQuestion } from './thread-messages.js';
+import { validAnswers } from './desktop-adapter.js';
 import { CodexRpc } from './codex-rpc.ts';
 import type { RpcMessage } from './codex-rpc.ts';
 import type { IntegrationStatus, QuestionRequest, ShellSnapshot, Thread } from './types.ts';
@@ -9,7 +11,7 @@ interface Status { type: 'notLoaded' | 'idle' | 'systemError' | 'active'; active
 interface CodexThread { id: string; cwd: string; name?: string | null; preview: string; createdAt: number; updatedAt: number; source?: string | Record<string, unknown>; parentThreadId?: string | null; status?: Status }
 interface Item { id: string; type: string; text?: string; content?: { type: string; text?: string }[] }
 interface Turn { id: string; status: string; items: Item[]; completedAt?: number | null }
-interface LiveThread { turnId?: string; status?: string; completedAt?: string; message?: Thread['latestVisibleMessage']; pending?: { nativeId: string | number; turnId: string; request: QuestionRequest }; approval?: string; inputId?: string }
+interface LiveThread { turnId?: string; status?: string; completedAt?: string; message?: Thread['latestVisibleMessage']; pending?: { nativeId: string | number; turnId: string; request: QuestionRequest }; approval?: { nativeId: string | number; request: QuestionRequest | null; params: Record<string, unknown>; method: string }; items?: Map<string, Record<string, unknown>>; inputId?: string }
 
 export class CodexSource extends HistorySource {
   readonly home: string;
@@ -27,7 +29,7 @@ export class CodexSource extends HistorySource {
   override get capabilities() { const live = this.shared && !!this.rpc && !this.rpc.closed; return { stop: live, answer: live }; }
   get integration(): IntegrationStatus {
     return this.shared && !this.rpc?.closed
-      ? { mode: 'live', detail: 'Connected to the shared Codex server. Stop and choice answers are available for its live sessions.' }
+      ? { mode: 'live', detail: 'Connected to the shared Codex server. Stop, choice answers, and approvals are available for its live sessions.' }
       : { mode: 'history', detail: this.socket ? 'Saved history. The configured Codex control socket is unavailable. Check its path in Thread source settings.' : 'Saved history. Start the shared Codex server, then run or resume sessions through it. Threadboard reconnects automatically.', ...this.socket ? {} : { setupCommand: `CODEX_HOME=${shellQuote(this.home)} ${shellQuote(this.cli)} app-server daemon start` } };
   }
   private changed(): void {
@@ -42,13 +44,16 @@ export class CodexSource extends HistorySource {
     if (message.method === 'turn/started') {
       const turn = p.turn as Turn;
       live.turnId = turn.id; live.status = 'running'; live.completedAt = undefined;
-      live.message = null; live.pending = undefined; live.approval = undefined; live.inputId = undefined;
+      live.message = null; live.pending = undefined; live.approval = undefined; live.inputId = undefined; live.items = new Map();
       this.messages.delete(id);
     } else if (message.method === 'turn/completed') {
       const turn = p.turn as Turn;
       live.turnId = turn.id; live.status = turn.status === 'completed' ? 'completed' : turn.status === 'failed' ? 'failed' : 'interrupted';
       live.completedAt = new Date((turn.completedAt ?? Date.now() / 1000) * 1000).toISOString();
-      live.pending = undefined; live.approval = undefined; live.inputId = undefined; this.messages.delete(id);
+      live.pending = undefined; live.approval = undefined; live.inputId = undefined; live.items = new Map(); this.messages.delete(id);
+    } else if (message.method === 'item/started' && p.item && typeof (p.item as Item).id === 'string') {
+      live.items ??= new Map(); live.items.set((p.item as Item).id, p.item as Record<string, unknown>);
+      if(live.items.size>100)live.items.delete(live.items.keys().next().value!);
     } else if (message.method === 'item/agentMessage/delta' && typeof p.itemId === 'string' && typeof p.delta === 'string') {
       const previous = live.message?.id === p.itemId ? live.message.text : '';
       live.message = { id: p.itemId, role: 'assistant', text: (previous + p.delta).slice(0, 32000), updatedAt: new Date().toISOString() };
@@ -63,10 +68,26 @@ export class CodexSource extends HistorySource {
         live.pending = { nativeId: message.id, turnId: String(p.turnId), request: { id: String(message.id), revision: String(p.turnId), responseCapability: 'live', questions: qs.map(q => ({ id: q.id, header: q.header, question: q.question, options: q.options! })) } };
       } else live.pending = undefined;
     } else if (message.method?.includes('requestApproval') && message.id !== undefined) {
-      live.approval = String(message.id);
+      if (typeof p.turnId !== 'string' || live.turnId && live.turnId !== p.turnId) { this.changed(); return; }
+      live.turnId ??= p.turnId;
+      const method = message.method!, item = live.items?.get(String(p.itemId));
+      const supported = ['item/commandExecution/requestApproval','item/fileChange/requestApproval','item/permissions/requestApproval'].includes(method);
+      const detail = method === 'item/commandExecution/requestApproval'
+        ? [p.networkApprovalContext ? `Network access: ${JSON.stringify(p.networkApprovalContext)}` : p.command ?? item?.command, p.cwd ? `Working directory: ${p.cwd}` : null, p.reason, p.additionalPermissions ? `Additional permissions: ${JSON.stringify(p.additionalPermissions)}` : null].filter(Boolean).join('\n')
+        : method === 'item/permissions/requestApproval' ? [p.reason, `Permissions: ${JSON.stringify(p.permissions)}`, p.cwd].filter(Boolean).join('\n')
+        : [p.reason, p.grantRoot ? `Grant root: ${p.grantRoot}` : null, item?.changes ? JSON.stringify(item.changes) : null].filter(Boolean).join('\n');
+      const available = Array.isArray(p.availableDecisions) ? p.availableDecisions : ['accept','decline','cancel'];
+      const options = method === 'item/permissions/requestApproval' ? [{value:'accept',label:'Approve this turn',description:'Grant only the requested permissions for this turn.'},{value:'decline',label:'Deny',description:'Grant no permissions.'}] : [
+        {value:'accept',label:'Approve once',description:'Allow this action.'},
+        {value:'acceptForSession',label:'Approve for session',description:'Allow matching actions for this session.'},
+        {value:'decline',label:'Deny',description:'Do not allow this action.'},
+        {value:'cancel',label:'Cancel turn',description:'Cancel the current turn.'},
+      ].filter(o => available.includes(o.value));
+      const hasDetails = method === 'item/commandExecution/requestApproval' ? !!(p.networkApprovalContext || p.command || item?.command) : method === 'item/permissions/requestApproval' ? !!p.permissions : !!item?.changes;
+      live.approval = {nativeId:message.id,params:p,method,request:supported && hasDetails ? approvalQuestion(String(message.id), JSON.stringify([method,p,item]), detail, options) : null};
     } else if (message.method === 'serverRequest/resolved') {
       if (live.pending?.nativeId === p.requestId) live.pending = undefined;
-      if (live.approval === String(p.requestId)) live.approval = undefined;
+      if (live.approval?.nativeId === p.requestId) live.approval = undefined;
       if (live.inputId === String(p.requestId)) live.inputId = undefined;
     }
     this.changed();
@@ -94,7 +115,7 @@ export class CodexSource extends HistorySource {
     if (status?.type === 'active') {
       thread.status = 'running'; thread.activeRunId = live?.turnId ?? null;
       const flags = status.activeFlags ?? [];
-      if (flags.includes('waitingOnApproval') || live?.approval) thread.pendingRuntimeRequest = { id: live?.approval ?? `${thread.id}:approval`, kind: 'approval' };
+      if (flags.includes('waitingOnApproval') || live?.approval) thread.pendingRuntimeRequest = { id: live?.approval ? String(live.approval.nativeId) : `${thread.id}:approval`, kind: 'approval' };
       else if (flags.includes('waitingOnUserInput')) thread.pendingRuntimeRequest = { id: `${thread.id}:input`, kind: 'user-input' };
     } else if (status?.type === 'systemError') thread.status = 'failed';
     if (live) {
@@ -105,6 +126,7 @@ export class CodexSource extends HistorySource {
       }
       if (live.completedAt) { thread.updatedAt = live.completedAt; thread.latestRunCompletedAt = live.completedAt; }
       if (live.message) { thread.latestVisibleMessage = live.message; thread.latestAssistantMessage = live.message; }
+      if (live.approval) { thread.pendingRuntimeRequest = {id:String(live.approval.nativeId),kind:'approval'}; thread.questionRequest = live.approval.request; }
       if (live.inputId) thread.pendingRuntimeRequest = { id: live.inputId, kind: 'user-input' };
       if (live.pending) {
         thread.pendingRuntimeRequest = { id: live.pending.request.id, kind: 'user-input' };
@@ -192,6 +214,16 @@ export class CodexSource extends HistorySource {
         await delay(100);
       }
       throw new Error('Codex has not confirmed the interrupted turn. Check the provider before retrying.');
+    }
+    if (command.type === 'runtime-request.respond' && command.decision !== undefined) {
+      const pending = this.live.get(threadId)?.approval;
+      if (!pending?.request || pending.request.id !== command.requestId || pending.params.turnId !== this.live.get(threadId)?.turnId || JSON.stringify(pending.request) !== command.questionSignature || !validAnswers(pending.request,{decision:command.decision})) throw new Error('This Codex approval changed before submission.');
+      const result = pending.method === 'item/permissions/requestApproval' ? {permissions:command.decision === 'accept' ? pending.params.permissions : {}, scope:'turn'} : {decision:command.decision};
+      this.rpc.send({id:pending.nativeId,result});
+      const deadline = Date.now() + 5000;
+      while (this.live.get(threadId)?.approval === pending && !this.rpc.closed && Date.now() < deadline) await delay(30);
+      if (this.live.get(threadId)?.approval === pending || this.rpc.closed) throw new Error('Codex did not confirm the approval. Check the provider before retrying.');
+      return;
     }
     if (command.type === 'runtime-request.respond') {
       const pending = this.live.get(threadId)?.pending;

@@ -44,13 +44,13 @@ sent until you press PLAY. Threads keep their white key while answering.
 K2 switches questions; K3 changes pages when there are more than 11 options.
 K1 scrolls the full question and labels on the device. Available option keys
 light at middle brightness; selected choices light at full brightness. Unused
-black keys stay off. Questions requiring typed text and
-approval requests stay in T3. Drafts stay in memory and reset if the request changes.
+black keys stay off. Typed answers stay in the provider. Approval requests use the same black-key
+selection and PLAY confirmation. No approval choice is selected automatically. Drafts stay in memory and reset if the request changes.
 An unconfirmed submission stays locked so a retry cannot send it twice.
 
 ![Concept illustration of choosing an answer with an upper key, then pressing PLAY to send.](docs/assets/answer-question-play-stop.png)
 
-*Choose first, then send. Typed answers and approvals stay in T3 Code.*
+*Choose first, then send. Typed answers stay in the provider.*
 
 ## Controls
 
@@ -60,8 +60,8 @@ An unconfirmed submission stays locked so a retry cannot send it twice.
 | SEL | Open the next thread needing attention |
 | REC | Stop the selected thread's work, including delegated work |
 | SAVE held + white key | Settle that thread after its work and requests are handled |
-| Black key | Choose or toggle the corresponding answer |
-| PLAY | Send completed answers, or reopen the thread when no question is shown |
+| Black key | Choose an answer or approval decision |
+| PLAY | Send answers or confirm an approval decision; otherwise reopen the thread |
 | K2 | Previous or next question |
 | K3 | Previous or next page of choices |
 | K1 | Scroll the response preview on the device |
@@ -86,6 +86,25 @@ The other knobs are unused in this first version. A short two-note chime plays
 when a thread finishes or raises a new request, response, plan or failure needing attention.
 Repeated polls and reconnects do not replay the same notification. The initial
 snapshot is silent. Simultaneous alerts share one chime.
+
+## Approvals
+
+Select the flashing thread, read the request with K1, choose a decision with a
+black key, then press PLAY. Selecting a thread never grants permission. T3 uses
+its offered choices, including any session or permanent approval and its warning.
+Codex offers the decisions supported by that request. Claude offers Approve once
+and Deny without changing saved permission rules. Changed requests reset the
+selection. Unconfirmed submissions cannot be sent again.
+
+Approvals require a live source connection. Claude also needs the generated
+launch settings. History-only sessions and Claude network prompts without a
+PermissionRequest hook remain in the provider. Requests over 1,100 characters,
+including warnings, requests with too many lines, or requests containing
+characters the FM-1 cannot render also remain in the provider. Unsupported Codex approval types stay there too.
+
+This change uses MIDI protocol 6 to carry the full approval preview. Rebuild and
+install the matching firmware before using this bridge with the FM-1, then reload
+the desktop adapter or restart Claude with the updated launch settings.
 
 ## Run it
 
@@ -116,13 +135,12 @@ restarts. Setup works even when T3 Code is not installed.
 
 | Source | Threads and controls |
 | --- | --- |
-| T3 Code | Live status, open in T3, stop, settle, and supported question answers. |
-| Codex | Live status, streaming previews, stop, and choice answers through the shared local server. Saved history remains available when the shared server is unavailable. |
-| Claude Code | Live foreground/background status through `claude agents --json`, stop for background sessions, and saved history. Optional launch hooks add streaming previews and choice answers. |
+| T3 Code | Live status, open in T3, stop, settle, and supported question answers and approvals. |
+| Codex | Live status, streaming previews, stop, and choice answers and command, file-change, and permission approvals through the shared local server. Saved history remains available when the shared server is unavailable. |
+| Claude Code | Live foreground/background status through `claude agents --json`, stop for background sessions, and saved history. Optional launch hooks add streaming previews, choice answers, and tool permission approvals. |
 
 The dashboard identifies live, history, and hook setup modes. White keys select a
-preview. Choice questions use the black keys and require PLAY to send. Permission
-approvals and typed answers stay in the provider. Settling a Codex or Claude thread
+preview. Choice questions use the black keys and require PLAY to send. Typed answers and requests that cannot be fully displayed stay in the provider. Settling a Codex or Claude thread
 hides it only in Threadboard, until a new run or new history arrives.
 It does not archive or delete the provider's conversation. Each source and home
 directory keeps its own key assignments. Claude's transcript format is internal
@@ -161,7 +179,7 @@ and input waits. REC uses `claude stop` only for a background session, with its
 identity checked again before dispatch. Foreground work must be stopped in Claude.
 Older CLIs fall back to saved history and optional hooks.
 
-For streaming previews and board-based choice answers, run the **Enable live
+For streaming previews, board-based choice answers, and tool approvals, run the **Enable live
 sessions** or selected thread's **Resume** command shown in the dashboard. It
 passes a generated `--settings` file to Claude. Your global and project settings
 are not edited. This also works when the bridge is restarted during a run.
@@ -170,7 +188,7 @@ The [hooks](https://code.claude.com/docs/en/hooks) record lifecycle events in
 private files under `.state/claude-live-*/`. `AskUserQuestion` waits for board
 answers for up to about ten minutes, then falls back to Claude's normal prompt.
 PLAY sends answers once; success requires Claude's `PostToolUse` event, not only
-a local file write. Other hooks return promptly. Stop events include background
+a local file write. Tool permission requests also wait for an explicit approval or denial. Other hooks return promptly. Stop events include background
 work, so an unfinished background task keeps the key working. Dead session or
 question-hook processes cannot accept answers. A live status that has not updated
 for 30 minutes becomes unavailable rather than claiming continued activity.
@@ -216,7 +234,7 @@ or an installed background extension. Stop it with `threadboardDesktop.stop()`.
 
 The local channel accepts only the `t3code://app` browser origin and uses a fresh
 session capability. T3 credentials stay inside T3. The channel accepts thread
-snapshots plus stop, settle and question-answer commands. Cached remote state remains visible as
+snapshots plus stop, settle, question-answer and approval commands. Cached remote state remains visible as
 unavailable while disconnected, reserves its keys and cannot receive commands.
 
 Options:

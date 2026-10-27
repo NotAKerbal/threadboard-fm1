@@ -1,6 +1,6 @@
 // Adapter for T3 Nightly 0.1.3-nightly.20261025.3692. It uses the app's existing
 // connections and dispatchers; no saved credentials are read or exported.
-import {createMessageReader} from './thread-messages.js';
+import {createMessageReader,approvalQuestion} from './thread-messages.js';
 export async function install(base = 'http://127.0.0.1:4781') {
   if (location.origin !== 't3code://app') throw new Error('Install this in the T3 desktop console.');
   globalThis.threadboardDesktop?.stop();
@@ -21,6 +21,13 @@ export async function install(base = 'http://127.0.0.1:4781') {
 }
 
 export function questionRequest(projection,id){
+  projection=projection.projection??projection;
+  const approval=projection.runtimeRequests?.find(r=>r.id===id&&['command','file-read','file-change','mcp-elicitation','permission'].includes(r.kind)&&r.status==='pending'&&r.responseCapability?.type==='live');
+  const approvalItem=projection.turnItems?.findLast(i=>i.type==='approval_request'&&i.requestId===id);
+  if(approval&&approvalItem&&typeof approvalItem.prompt==='string'&&approvalItem.prompt.trim()){
+    const options=approvalItem.options??[{decision:'accept',label:'Approve once'},{decision:'decline',label:'Deny'}];
+    return approvalQuestion(id,JSON.stringify([approval,approvalItem]),[approvalItem.prompt,approvalItem.reason,approvalItem.appName,approvalItem.fullAccessOverride==='ask_rule'?'This overrides a permission ask rule.':approvalItem.fullAccessOverride?'This overrides a provider permission check.':null,...options.filter(o=>o.warning).map(o=>`${o.label}: ${o.warning}`)].filter(Boolean).join('\n'),options.filter(o=>['accept','acceptForSession','acceptAlways','decline','cancel'].includes(o.decision)).map(o=>({value:o.decision,label:o.label,description:o.warning??''})));
+  }
   const request=projection.runtimeRequests?.find(r=>r.id===id&&r.kind==='user_input'&&r.status==='pending');
   const item=projection.turnItems?.findLast(i=>i.type==='user_input_request'&&i.requestId===id);
   if(!request||!item||request.responseCapability?.type==='not_resumable')return null;
@@ -76,7 +83,7 @@ export async function connect({registry,shells,connections,dispatchCommand,readP
       if(!messageReaders.has(e.id))messageReaders.set(e.id,createMessageReader(id=>readProjection(e.id,id)));
       await messageReaders.get(e.id)(e.snapshot.threads);
     }));
-    await Promise.all(environments.flatMap(e=>!e.connected||!readProjection?[]:e.snapshot?.threads.filter(t=>t.pendingRuntimeRequest?.kind==='user_input').map(async t=>{
+    await Promise.all(environments.flatMap(e=>!e.connected||!readProjection?[]:e.snapshot?.threads.filter(t=>!!t.pendingRuntimeRequest).map(async t=>{
       const key=JSON.stringify([e.id,t.id,t.pendingRuntimeRequest.id]);
       let cached=questionCache.get(key);
       if(!cached||cached.expires<Date.now()){
@@ -101,7 +108,7 @@ export async function connect({registry,shells,connections,dispatchCommand,readP
         let allowed=['thread.stop','thread.settle'].includes(command.input.type);
         if(command.input.type==='runtime-request.respond'&&readProjection){
           const fresh=questionRequest(await readProjection(command.environmentId,command.input.threadId),command.input.requestId);
-          allowed=JSON.stringify(fresh)===command.expectedQuestion&&validAnswers(fresh,command.input.answers);
+          allowed=JSON.stringify(fresh)===command.expectedQuestion&&(fresh?.kind==='approval'?validAnswers(fresh,{decision:command.input.decision}):validAnswers(fresh,command.input.answers));
           questionCache.clear();
         }
         if (allowed && registry.get(shells.stateValueAtom(command.environmentId)).status==='live') {

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { T3Client } from './t3.ts';
-import type { ShellSnapshot, ThreadSource } from './types.ts';
+import type { ShellSnapshot, ThreadSource, Thread } from './types.ts';
 
 export interface DesktopEnvironment { id: string; label: string; connected: boolean; snapshot: ShellSnapshot | null }
 export interface DesktopCommand { id: string; environmentId: string; input: Record<string, unknown>; expectedQuestion?:string }
@@ -49,6 +49,7 @@ export class DesktopSource implements ThreadSource {
     }
     return merged;
   }
+  async readThread(thread: Thread): Promise<void> { if (!this.receivedAt) await this.local.readThread(thread); }
   private route(id: string): { environmentId: string; nativeId: string } {
     const split = id.indexOf('::');
     const environmentId = split < 0 ? this.environmentId : id.slice(0, split), nativeId = split < 0 ? id : id.slice(split + 2);

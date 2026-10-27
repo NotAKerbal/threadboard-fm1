@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events';
 import { join } from 'node:path';
 import { Bindings } from './bindings.ts';
 import { demoSnapshot,demoQuestion } from './demo.ts';
+import { approvalQuestion } from './thread-messages.js';
 import { Questions } from './questions.ts';
 import { resultExcerpt, messageExcerpt } from './result.ts';
 import { KEY_COUNT, WORKING, THREAD_KEYS, isDone } from './types.ts';
@@ -129,6 +130,7 @@ export class Board extends EventEmitter {
       thread.pendingRuntimeRequest = null; thread.latestVisibleMessage = null; thread.activeRunId = null; thread.updatedAt = now;
       if (state === 'working') { thread.status = 'running'; thread.activeRunId = `run-${Date.now()}`; }
       else if (state === 'attention') { const id=`q-${Date.now()}`;thread.status = 'waiting'; thread.activeRunId = 'waiting-run'; thread.pendingRuntimeRequest = { id, kind: 'user-input' };thread.questionRequest=demoQuestion(id); }
+      else if (state === 'approval') { const id=`approval-${Date.now()}`;thread.status='waiting';thread.activeRunId='waiting-run';thread.pendingRuntimeRequest={id,kind:'approval'};thread.questionRequest=approvalQuestion(id,id,'Run npm test in the selected project?', [{label:'Approve once',description:'Allow this action.',value:'accept'},{label:'Deny',description:'Do not allow this action.',value:'decline'}]); }
       else if (state === 'finished') { thread.status = 'completed'; thread.latestVisibleMessage = { id: `m-${Date.now()}`, role: 'assistant', text: 'The work is ready for you to review. This thread keeps its key until you settle it.', updatedAt: now }; }
       else throw new Error('Unknown demo state');
       await this.refreshNow();

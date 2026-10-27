@@ -50,3 +50,13 @@ test('commands from a prior USB session cannot act on current threads', () => {
   assert.equal(parseAction(body,13),null);
   assert.deepEqual(parseAction(body,12),{sequence:7,action:{action:'settle',key:4,token:12345,value:0}});
 });
+
+
+test('approval previews preserve command spaces and line breaks across MIDI',async()=>{
+ const b=new Board(null,'unused',true);await b.refresh();
+ await b.demoState(b.view.selected,'approval');
+ const text="printf 'two  spaces'\nprintf 'next line'";
+ b.view.question!.text=text;
+ const bodies=snapshotFrames(b.view,42).map(f=>decodeFrame(f)!).filter(b=>b[1]===7);
+ assert.equal(Buffer.concat(bodies.map(b=>b.subarray(14))).toString('ascii'),text);
+});

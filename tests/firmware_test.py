@@ -44,6 +44,8 @@ script+=inject(result)+['wait 32','expect scrolled 1']
 script+=inject(fixture['resultClear'])+['wait 32','expect result_len 0','expect scroll 0']
 script+=inject(fixture['sleeping'])+['wait 32','expect breath 1','wait 6100','expect linked 0','expect breath 0']
 script+=inject(fixture['awake'])+['wait 32','expect linked 1','expect breath 0']
+script+=inject(fixture['approvals'][0])+['wait 32','expect approval 1','expect question_ready 0','expect result_len '+str(fixture['approvalLength']),'tap PLAY','expect action 6','spin K1 60','wait 32','expect scrolled 1','shot approval-request.png','tapkey 3','expect action 5','expect action_token 2001','inject '+fixture['approvalAcks'][0]]
+script+=inject(fixture['approvals'][1])+['wait 32','expect question_ready 1','tap PLAY','expect action 6','expect action_token 2002','inject '+fixture['approvalAcks'][1]]
 path=out/'scenario.tb';path.write_text('\n'.join(script)+'\n')
 expanded=[]
 for line in script:
@@ -63,12 +65,13 @@ check="""
 import {decodeFrame,parseAction} from './bridge/protocol.ts';
 const frames=JSON.parse(process.argv[1]);
 const actions=frames.map(hex=>decodeFrame([...Buffer.from(hex,'hex')])).filter(b=>b&&b[1]===4);
-if(actions.length!==6)throw new Error('Expected six panel commands');
+if(actions.length!==8)throw new Error('Expected eight panel commands');
 const decoded=actions.map(b=>parseAction(b,b.readUInt32LE(2)));
 if(decoded[0].action.action!=='select'||decoded[0].action.token!==103)throw new Error('Wrong selected thread');
 if(decoded[1].action.action!=='settle'||decoded[1].action.token!==102)throw new Error('Wrong settlement binding');
 if(decoded[2].action.token!==101||actions[2].readUInt32LE(2)!==77)throw new Error('Reconnect used an old session');
 if(decoded[3].action.action!=='choose'||decoded[3].action.token!==1001||decoded[4].action.token!==1002||decoded[5].action.action!=='confirm'||decoded[5].action.token!==1003)throw new Error('Question actions did not carry the displayed question token');
+if(decoded[6].action.action!=='choose'||decoded[6].action.token!==2001||decoded[7].action.action!=='confirm'||decoded[7].action.token!==2002)throw new Error('Approval selection or confirmation used a stale token');
 console.log('C firmware output decoded successfully by the TypeScript bridge.');
 """
 subprocess.run(['node','--input-type=module','-e',check,json.dumps(outgoing)],cwd=root,check=True)

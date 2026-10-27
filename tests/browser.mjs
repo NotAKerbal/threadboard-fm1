@@ -65,6 +65,17 @@ try {
   await page.waitForFunction(()=>document.querySelector('#question-panel').hidden);
   assert.equal(await page.locator('.thread-key.black:disabled').count(),11);
   state=await page.request.get(base+'/api/state').then(r=>r.json());assert.equal(state.slots[running.key].threadId,running.threadId);
+  await page.getByRole('button',{name:'Approval',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelector('#question-title').textContent==='Approval requested');
+  assert.equal(await page.locator('#send-answers').isDisabled(),true);
+  assert.equal(await page.locator('.answer-option[aria-pressed="true"]').count(),0);
+  await page.locator('.thread-key.black[data-key="3"]').click();
+  await page.waitForFunction(()=>!document.querySelector('#send-answers').disabled);
+  assert.equal(await page.locator('.answer-option[aria-pressed="true"] span').textContent(),'2. Deny');
+  await page.screenshot({path:'output/screenshots/approval.png',fullPage:true});
+  await page.getByRole('button',{name:'Confirm decision'}).click();
+  await page.waitForFunction(()=>document.querySelector('#question-panel').hidden);
+  state=await page.request.get(base+'/api/state').then(r=>r.json());assert.equal(state.slots[running.key].threadId,running.threadId);
   await page.screenshot({path:'output/screenshots/desktop.png',fullPage:true});
   await page.setViewportSize({width:375,height:850});
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth));

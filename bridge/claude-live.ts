@@ -3,6 +3,8 @@ import { link, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'nod
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
+import { approvalQuestion } from './thread-messages.js';
+import { validAnswers } from './desktop-adapter.js';
 import type { QuestionRequest, Thread } from './types.ts';
 
 export interface ClaudeLiveState {
@@ -11,6 +13,8 @@ export interface ClaudeLiveState {
   waiting?: { id: string; kind: string };
   pending?: { request: QuestionRequest; expiresAt: number; input: Record<string, unknown>; hookPid: number };
   submittedQuestion?: string;
+  submittedApproval?: { id: string; toolUseId?: string; decision: string };
+  currentTool?: { name: string; inputHash: string; id?: string };
 }
 export const digest = (value: string): string => createHash('sha256').update(value).digest('hex').slice(0, 32);
 export const claudeLiveDir = (stateDir: string, home: string): string => join(stateDir, `claude-live-${digest(home)}`);
@@ -65,25 +69,40 @@ export async function captureClaudeEvent(dir: string, event: Record<string, unkn
       questions = { id: typeof event.tool_use_id === 'string' ? event.tool_use_id : randomUUID(), responseCapability: 'live', questions: qs.map((q, i) => ({ id: String(i), header: q.header, question: q.question, multiSelect: q.multiSelect === true, options: q.options })) };
     }
   }
+  if (name === 'PermissionRequest' && typeof event.tool_name === 'string' && input && typeof input === 'object') {
+    questions = approvalQuestion(randomUUID(), JSON.stringify(event), `Tool: ${event.tool_name}\nWorking directory: ${cwd}\n${JSON.stringify(input, null, 2)}`, [
+      {label:'Approve once',description:'Allow only this tool call.',value:'accept'},
+      {label:'Deny',description:'Do not allow this tool call.',value:'decline'},
+    ]) ?? undefined;
+    if (!questions?.questions[0]?.options.length) questions=undefined;
+  }
   const state = await update(dir, id, previous => {
     const state: ClaudeLiveState = previous && previous.ownerPid === ownerPid ? previous : { sessionId: id, cwd, ownerPid, observedAt: now, runId: randomUUID(), status: 'idle' };
     state.cwd = cwd;
     // Idle reminders are not questions and must not resurrect completed work.
     if (name === 'Notification' && !['permission_prompt', 'elicitation_dialog', 'elicitation_url_dialog'].includes(String(event.notification_type))) return state;
     state.observedAt = now;
+    if (state.submittedApproval && ((['PostToolUse','PostToolUseFailure'].includes(name) && event.tool_use_id === state.submittedApproval.toolUseId && !!state.submittedApproval.toolUseId) || (state.submittedApproval.decision==='decline' && ['MessageDisplay','Stop','StopFailure'].includes(name)))) {
+      acknowledged = state.submittedApproval.id; state.submittedApproval = undefined;
+    }
+    if (name === 'PreToolUse' && typeof event.tool_name === 'string' && input) state.currentTool = {name:event.tool_name,inputHash:digest(JSON.stringify(input)),id:typeof event.tool_use_id==='string'?event.tool_use_id:undefined};
     if (name === 'UserPromptSubmit') {
       state.runId = typeof event.prompt_id === 'string' ? event.prompt_id : randomUUID();
-      state.status = 'running'; state.pending = undefined; state.waiting = undefined; state.message = null; state.backgroundTasks = []; state.submittedQuestion = undefined;
+      state.status = 'running'; state.pending = undefined; state.waiting = undefined; state.message = null; state.backgroundTasks = []; state.submittedQuestion = undefined; state.submittedApproval = undefined; state.currentTool = undefined;
     } else if (name === 'PreToolUse' || name === 'PostToolUse' || name === 'PostToolUseFailure') {
       state.status = 'running';
-      if (name !== 'PreToolUse' || !state.pending) state.waiting = undefined;
+      if (!state.pending) state.waiting = undefined;
       if (questions) { questions.revision = state.runId; state.pending = { request: questions, input: input!, expiresAt: Date.now() + 580000, hookPid: process.pid }; state.waiting = { id: questions.id, kind: 'user-input' }; }
-      else if (event.tool_name === 'AskUserQuestion' && name !== 'PreToolUse') {
+      else if (event.tool_name === 'AskUserQuestion' && name !== 'PreToolUse' && state.pending?.request.kind !== 'approval') {
         if (name === 'PostToolUse' && state.submittedQuestion === event.tool_use_id) acknowledged = state.submittedQuestion;
         state.submittedQuestion = undefined; state.pending = undefined; state.waiting = undefined;
       }
     } else if (name === 'PermissionRequest' || name === 'Notification') {
-      if (state.status !== 'completed' && state.status !== 'failed') {
+      if (questions?.kind === 'approval') {
+        questions.revision = JSON.stringify([state.runId,questions.revision]);
+        state.pending = {request:questions,input:input!,expiresAt:Date.now()+580000,hookPid:process.pid};
+        state.waiting = {id:questions.id,kind:'approval'};
+      } else if (!state.pending && state.status !== 'completed' && state.status !== 'failed') {
         state.waiting = { id: String(event.tool_use_id ?? `${state.runId}:permission`), kind: name === 'PermissionRequest' || event.notification_type === 'permission_prompt' ? 'approval' : 'user-input' };
       }
     } else if (name === 'MessageDisplay' && typeof event.delta === 'string' && typeof event.message_id === 'string') {
@@ -102,21 +121,31 @@ export async function captureClaudeEvent(dir: string, event: Record<string, unkn
   if (acknowledged) await writeAtomic(join(dir, 'acks', `${digest(acknowledged)}.json`), { requestId: acknowledged, runId: state.runId });
   if (!questions || state.pending?.request.id !== questions.id) return {};
   const request = questions;
-  // Only the question hook waits. Every status hook returns immediately.
+  // Only interactive question and permission hooks wait. Status hooks return promptly.
   try {
     while (Date.now() < state.pending.expiresAt && ownerAlive(ownerPid)) {
       const current = await readState(sessionPath(dir, id));
       if (current?.ownerPid !== ownerPid || current.runId !== state.runId || current.pending?.request.id !== request.id) return {};
-      type Response = { requestId: string; runId: string; signature: string; answers: Record<string, string | string[]> };
+      type Response = { requestId: string; runId: string; signature: string; answers?: Record<string, string | string[]>; decision?: string };
       let response: Response | null = null;
       try { response = JSON.parse(await readFile(answerPath(dir, request.id), 'utf8')) as Response; }
       catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
       if (response && (response.requestId !== request.id || response.runId !== state.runId || response.signature !== JSON.stringify(request))) { await rm(answerPath(dir, request.id), { force: true }); continue; }
       if (response) {
         const submitted = response;
+        if (request.kind === 'approval') {
+          if (!validAnswers(request, {decision:submitted.decision})) throw new Error('Invalid approval decision.');
+          await update(dir,id,s=>{
+            if (!s || s.ownerPid!==ownerPid || s.runId!==state.runId || s.pending?.request.id!==request.id) throw new Error('Approval expired.');
+            const tool=s.currentTool;
+            s.submittedApproval={id:request.id,decision:submitted.decision!,toolUseId:tool&&tool.name===event.tool_name&&tool.inputHash===digest(JSON.stringify(input))?tool.id:undefined};
+            s.pending=undefined;s.waiting=undefined;s.status='running';s.observedAt=new Date().toISOString();return s;
+          });
+          return {hookSpecificOutput:{hookEventName:'PermissionRequest',decision:submitted.decision==='accept'?{behavior:'allow'}:{behavior:'deny',message:'Denied from Threadboard.'}}};
+        }
         const answers: Record<string, string> = {};
         for (const q of request.questions) {
-          const value = submitted.answers[q.id], values = Array.isArray(value) ? value : [value];
+          const value = submitted.answers?.[q.id], values = Array.isArray(value) ? value : [value];
           if (!values.length || values.some(v => typeof v !== 'string' || !q.options.some(o => o.label === v))) throw new Error('Invalid question answer.');
           answers[q.question] = values.join(', ');
         }
@@ -136,7 +165,7 @@ export async function prepareClaudeHooks(stateDir: string, home: string): Promis
   const dir = claudeLiveDir(stateDir, home), settings = join(dir, 'settings.json');
   const script = fileURLToPath(import.meta.url);
   const events = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'PostToolUseFailure', 'PermissionRequest', 'Notification', 'MessageDisplay', 'Stop', 'StopFailure', 'SessionEnd'];
-  const hooks = Object.fromEntries(events.map(event => [event, [{ hooks: [{ type: 'command', command: process.execPath, args: [script, '--events-dir', dir], timeout: event === 'PreToolUse' ? 600 : 5 }] }]]));
+  const hooks = Object.fromEntries(events.map(event => [event, [{ hooks: [{ type: 'command', command: process.execPath, args: [script, '--events-dir', dir], timeout: ['PreToolUse','PermissionRequest'].includes(event) ? 600 : 5 }] }]]));
   await writeAtomic(settings, { hooks });
   return { dir, settings };
 }

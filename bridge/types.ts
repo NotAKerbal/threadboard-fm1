@@ -2,8 +2,8 @@ export const KEY_COUNT = 27;
 export const THREAD_KEYS = [0,2,4,6,7,9,11,12,14,16,18,19,21,23,24,26] as const;
 export const ANSWER_KEYS = [1,3,5,8,10,13,15,17,20,22,25] as const;
 export interface Question { id: string; header: string; question: string; options: {label:string;description:string;value?:string}[]; multiSelect?:boolean; required?:boolean }
-export interface QuestionRequest { id:string; revision?:string; questions:Question[]; responseCapability:'live'|'message'|'not_resumable' }
-export interface QuestionView { token:number; threadId:string; requestId:string; header:string; text:string; index:number; total:number; page:number; pages:number; answered:number; multiSelect:boolean; canSubmit:boolean; submitted:boolean; choices:{key:number;label:string;description:string;selected:boolean}[] }
+export interface QuestionRequest { kind?:'approval'; id:string; revision?:string; questions:Question[]; responseCapability:'live'|'message'|'not_resumable' }
+export interface QuestionView { kind?:'approval'; token:number; threadId:string; requestId:string; header:string; text:string; index:number; total:number; page:number; pages:number; answered:number; multiSelect:boolean; canSubmit:boolean; submitted:boolean; choices:{key:number;label:string;description:string;selected:boolean}[] }
 export type LightState = 'empty' | 'idle' | 'working' | 'attention' | 'unavailable' | 'snoozed';
 export interface Thread {
   live?: boolean;
@@ -113,7 +113,7 @@ export function lightState(t: Thread, now = Date.now()): { state: LightState; re
   if (!isActive(t)) return { state: 'idle', reason: 'Settled' };
   if (t.snoozedUntil && Date.parse(t.snoozedUntil) > now) return { state: 'snoozed', reason: 'Snoozed' };
   if (t.pendingRuntimeRequest) {
-    return { state: 'attention', reason: /approv|permission/.test(t.pendingRuntimeRequest.kind) ? 'Approval waiting' : 'Question waiting' };
+    return { state: 'attention', reason: (/approv|permission/.test(t.pendingRuntimeRequest.kind)||['command','file-read','file-change','mcp-elicitation'].includes(t.pendingRuntimeRequest.kind)) ? 'Approval waiting' : 'Question waiting' };
   }
   if (t.pendingGuestMessageCount) return { state: 'attention', reason: 'Guest message waiting' };
   if (WORKING.has(t.status) || t.activeRunId || (t.activityRunStatus && WORKING.has(t.activityRunStatus)) || t.pendingBackgroundTasks?.length) {

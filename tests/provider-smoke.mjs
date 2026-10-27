@@ -47,7 +47,7 @@ try {
   owner = new CodexRpc('codex', codexHome, ['proxy','--sock',socket], () => {}, () => {});
   await owner.request('initialize', { clientInfo: { name: 'threadboard_qa', version: '0.1.0' }, capabilities:{experimentalApi:true} }); owner.send({method:'initialized',params:{}});
   console.log('Installed Codex fixture connected to its isolated shared daemon.');
-  const started = await owner.request('thread/start', { cwd: root, model: 'mock-model', modelProvider: 'mock', approvalPolicy: 'never' });
+  const started = await owner.request('thread/start', { cwd: root, model: 'mock-model', modelProvider: 'mock', approvalPolicy: 'on-request', sandbox:'read-only' });
   const id = started.thread.id;
   await owner.request('turn/start', { threadId: id, input: [{ type: 'text', text: 'Return a short status.' }] });
   await until(() => !!codexStream, 'Codex did not reach the local fixture.');
@@ -77,12 +77,31 @@ try {
   await codex.dispatch({type:'thread.stop',threadId:id});
   console.log('Installed Codex passed: a second client receives a real tool question and its answer is confirmed by the server.');
 
+  for(const decision of ['accept','cancel']) {
+    const count=codexRequests;
+    await owner.request('turn/start',{threadId:id,input:[{type:'text',text:'Request approval for a harmless test command.'}]});
+    await until(()=>codexRequests>count,'Codex approval turn did not reach fixture.');
+    const call={type:'function_call',id:`fc_${decision}`,call_id:`call_${decision}`,name:'exec_command',arguments:JSON.stringify({cmd:'printf approved',sandbox_permissions:'require_escalated',justification:'Test explicit Threadboard approval.'})};
+    event(codexStream,'response.output_item.added',{output_index:0,item:{...call,arguments:''}});
+    event(codexStream,'response.function_call_arguments.delta',{item_id:call.id,output_index:0,delta:call.arguments});
+    event(codexStream,'response.function_call_arguments.done',{item_id:call.id,output_index:0,arguments:call.arguments});
+    event(codexStream,'response.output_item.done',{output_index:0,item:call});
+    event(codexStream,'response.completed',{response:{id:`resp_${decision}`,status:'completed',output:[call],usage:{input_tokens:1,output_tokens:4,total_tokens:5}}});codexStream.end();
+    await until(async()=>{snapshot=await codex.snapshot();return snapshot.threads.find(t=>t.id===id)?.questionRequest?.kind==='approval';},'Codex did not deliver the approval to the second client.');
+    const request=snapshot.threads.find(t=>t.id===id).questionRequest;
+    assert(request.questions[0].options.some(o=>o.value===decision),JSON.stringify(request));
+    await codex.dispatch({type:'runtime-request.respond',threadId:id,requestId:request.id,questionSignature:JSON.stringify(request),decision});
+    if(decision==='accept')await codex.dispatch({type:'thread.stop',threadId:id});
+    else assert.notEqual((await codex.snapshot()).threads.find(t=>t.id===id).status,'running');
+  }
+  console.log('Installed Codex passed: real command approvals can be accepted or cancelled by the second client, with server confirmation.');
+
   const setup = await prepareClaudeHooks(stateDir, claudeHome);
   const env = { ...process.env };
   for (const key of Object.keys(env)) if (key.startsWith('ANTHROPIC_') || key.startsWith('CLAUDE_')) delete env[key];
   Object.assign(env, { CLAUDE_CONFIG_DIR:claudeHome, ANTHROPIC_API_KEY:'local-fixture-only', ANTHROPIC_BASE_URL:base, CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC:'1', DISABLE_AUTOUPDATER:'1' });
   let output = '';
-  claudeChild = spawn('claude', ['-p','--input-format','stream-json','--output-format','stream-json','--verbose','--permission-prompt-tool','stdio','--model','claude-sonnet-4-5','--settings',setup.settings,'--strict-mcp-config','--mcp-config','{"mcpServers":{}}','--max-turns','3','--no-session-persistence'], { cwd:root,env,stdio:['pipe','pipe','pipe'] });
+  claudeChild = spawn('claude', ['-p','--input-format','stream-json','--output-format','stream-json','--verbose','--permission-prompt-tool','stdio','--model','claude-sonnet-4-5','--settings',setup.settings,'--strict-mcp-config','--mcp-config','{"mcpServers":{}}','--max-turns','6','--no-session-persistence'], { cwd:root,env,stdio:['pipe','pipe','pipe'] });
   claudeChild.stdin.write(JSON.stringify({type:'control_request',request_id:'init',request:{subtype:'initialize'}})+'\n');
   claudeChild.stdin.write(JSON.stringify({type:'user',message:{role:'user',content:'Return a short status.'},parent_tool_use_id:null,session_id:''})+'\n');
   claudeChild.stdout.on('data',chunk=>{output+=chunk;});claudeChild.stderr.on('data',()=>{});
@@ -96,20 +115,40 @@ try {
   event(claudeStream,'content_block_stop',{index:0});
   event(claudeStream,'message_delta',{delta:{stop_reason:'tool_use',stop_sequence:null},usage:{output_tokens:4}});
   event(claudeStream,'message_stop',{});claudeStream.end();
-  claudeChild.stdin.end();
   await until(async()=>{snapshot=await claude.snapshot();return snapshot.threads.some(t=>t.questionRequest);},'Claude did not route AskUserQuestion through its hook.');
   const asking = snapshot.threads.find(t=>t.questionRequest), questionRequest = asking.questionRequest;
   await claude.dispatch({type:'runtime-request.respond',threadId:asking.id,requestId:questionRequest.id,questionSignature:JSON.stringify(questionRequest),answers:{'0':'Local'}});
   await until(()=>claudeRequests>1,'Claude did not continue after the confirmed tool answer.');
-  event(claudeStream,'content_block_start',{index:0,content_block:{type:'text',text:''}});
-  event(claudeStream,'content_block_delta',{index:0,delta:{type:'text_delta',text:'Claude fixture complete.'}});
-  event(claudeStream,'content_block_stop',{index:0});
+  for(const decision of ['accept','decline']) {
+    const count=claudeRequests,marker=join(root,`claude-${decision}.txt`);
+    const toolInput={command:`printf approved > '${marker}'`,description:'Test explicit Threadboard permission.'};
+    event(claudeStream,'content_block_start',{index:0,content_block:{type:'tool_use',id:`toolu_${decision}`,name:'Bash',input:{}}});
+    event(claudeStream,'content_block_delta',{index:0,delta:{type:'input_json_delta',partial_json:JSON.stringify(toolInput)}});
+    event(claudeStream,'content_block_stop',{index:0});
+    event(claudeStream,'message_delta',{delta:{stop_reason:'tool_use',stop_sequence:null},usage:{output_tokens:4}});
+    event(claudeStream,'message_stop',{});claudeStream.end();
+    await until(async()=>{snapshot=await claude.snapshot();return snapshot.threads.some(t=>t.questionRequest?.kind==='approval');},'Claude did not route PermissionRequest through its hook.');
+    const thread=snapshot.threads.find(t=>t.questionRequest?.kind==='approval'),request=thread.questionRequest;
+    const reply=claude.dispatch({type:'runtime-request.respond',threadId:thread.id,requestId:request.id,questionSignature:JSON.stringify(request),decision});
+    await until(()=>claudeRequests>count,'Claude did not continue after permission response.');
+    // Denials have no PostToolUse event, so confirm subsequent provider activity.
+    event(claudeStream,'content_block_start',{index:0,content_block:{type:'text',text:''}});
+    event(claudeStream,'content_block_delta',{index:0,delta:{type:'text_delta',text:`Permission ${decision} handled.`}});
+    event(claudeStream,'content_block_stop',{index:0});
+    await reply;
+    assert.equal(await stat(marker).then(()=>true,()=>false),decision==='accept',output.slice(-10000));
+  }
+  console.log('Installed Claude passed: real permission allow executes the harmless command; deny leaves its file absent.');
+  event(claudeStream,'content_block_start',{index:1,content_block:{type:'text',text:''}});
+  event(claudeStream,'content_block_delta',{index:1,delta:{type:'text_delta',text:'Claude fixture complete.'}});
+  event(claudeStream,'content_block_stop',{index:1});
   event(claudeStream,'message_delta',{delta:{stop_reason:'end_turn',stop_sequence:null},usage:{output_tokens:4}});
   event(claudeStream,'message_stop',{});claudeStream.end();
+  claudeChild.stdin.end();
   await until(()=>claudeChild.exitCode!==null,'Claude fixture did not finish.');
   assert.equal(claudeChild.exitCode,0,output);
   snapshot = await claude.snapshot();
-  assert(snapshot.threads.some(t=>t.status==='completed'&&t.latestAssistantMessage?.text==='Claude fixture complete.'));
+  assert(snapshot.threads.some(t=>t.status==='completed'&&t.latestAssistantMessage?.text.includes('Claude fixture complete.')));
   console.log('Installed Claude passed: hook lifecycle, real AskUserQuestion answer confirmed by PostToolUse, final response, completion.');
 } finally {
   await claude?.close(); await codex?.close(); owner?.close(); claudeChild?.kill();

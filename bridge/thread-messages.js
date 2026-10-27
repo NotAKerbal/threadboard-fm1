@@ -54,3 +54,16 @@ export function createMessageReader(readProjection) {
     }));
   };
 }
+
+// Approval choices use the same explicit selection and PLAY confirmation as questions.
+export function approvalQuestion(id, revision, text, options) {
+  if (typeof text !== 'string' || !text.trim() || !Array.isArray(options)) return null;
+  // The FM-1 cannot render Unicode or more than 1,100 characters of approval detail.
+  // Keep these requests in the provider instead of approving an incomplete preview.
+  const lines = text.split('\n').reduce((n,line)=>n+Math.max(1,Math.ceil(line.length/30)),0);
+  const readable = text.length <= 1100 && lines <= 44 && !/[^\x20-\x7e\n]/.test(text);
+  return {id,kind:'approval',revision,responseCapability:'live',questions:[{
+    id:'decision',header:'Approval requested',question:readable ? text : 'Review this approval in the provider. Its full details cannot be shown on the FM-1.',
+    options:readable ? options : [],
+  }]};
+}

@@ -47,9 +47,19 @@ Available answer keys light at middle brightness; selected choices light at
 full brightness. Choosing an answer does not send it. The thread keeps its
 assigned white key throughout.
 
-Use **K1** to scroll the question and answer labels. Typed answers and approval
-requests stay in T3 Code. Reading a request does not clear it. If a request
+Use **K1** to scroll the question and answer labels. Typed answers stay in the provider. Reading a request does not clear it. If a request
 changes, its unsent choices reset.
+
+## Approve or deny an action
+
+Select the flashing thread and scroll through the request with **K1**. Press the
+black key for the decision you want, then press **PLAY** to confirm. Nothing is
+selected by default, and opening the thread never approves anything. T3 uses its
+offered decisions and warnings. Codex exposes supported approval choices. Claude
+live hooks offer **Approve once** and **Deny**.
+
+If the full request cannot be displayed, review it in the provider. Unconfirmed
+submissions stay locked. The board requires the matching protocol-6 firmware.
 
 ## Read and settle finished work
 

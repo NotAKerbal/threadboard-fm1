@@ -10,14 +10,14 @@ export async function sharedCodexFixture(home: string): Promise<() => Promise<vo
   await mkdir(join(home, 'app-server-control'), { recursive: true });
   const server = createServer(), sockets = new WebSocketServer({ server });
   const livePath = join(home, 'live.json');
-  const state = () => JSON.parse(readFileSync(livePath, 'utf8')) as { status: string; turnStatus: string; question: boolean };
-  const thread = (id: string) => ({ id, cwd: '/work/project', name: 'Codex ' + id, preview: 'Fix things', createdAt: 1793016000, updatedAt: 1793016060, source: 'cli', status: id === 'first' ? { type: state().status, activeFlags: state().question ? ['waitingOnUserInput'] : [] } : { type: 'notLoaded' } });
+  const state = () => JSON.parse(readFileSync(livePath, 'utf8')) as { status: string; turnStatus: string; question: boolean; approval?: string; decision?: string; noAck?: boolean; changed?: boolean };
+  const thread = (id: string) => ({ id, cwd: '/work/project', name: 'Codex ' + id, preview: 'Fix things', createdAt: 1793016000, updatedAt: 1793016060, source: 'cli', status: id === 'first' ? { type: state().status, activeFlags: state().approval ? ['waitingOnApproval'] : state().question ? ['waitingOnUserInput'] : [] } : { type: 'notLoaded' } });
   sockets.on('connection', socket => {
     const emit = (value: unknown) => socket.send(JSON.stringify(value));
     socket.on('message', text => {
       const r = JSON.parse(String(text)) as RpcMessage;
       appendFileSync(join(home, 'requests.jsonl'), String(text) + '\n');
-      if (!r.method) { const s = state(); s.question = false; writeFileSync(livePath, JSON.stringify(s)); emit({ method: 'serverRequest/resolved', params: { threadId: 'first', requestId: r.id } }); return; }
+      if (!r.method) { const s = state(); if(s.noAck)return; s.question = false; s.approval = undefined; writeFileSync(livePath, JSON.stringify(s)); emit({ method: 'serverRequest/resolved', params: { threadId: 'first', requestId: r.id } }); return; }
       if (r.id === undefined) return;
       let result: unknown;
       if (r.method === 'initialize') result = {};
@@ -32,6 +32,11 @@ export async function sharedCodexFixture(home: string): Promise<() => Promise<vo
       if (r.method === 'thread/resume') {
         emit({ method: 'turn/started', params: { threadId: 'first', turn: { id: 'turn1', status: 'inProgress', items: [] } } });
         emit({ method: 'item/agentMessage/delta', params: { threadId: 'first', itemId: 'stream1', delta: 'A live streamed response' } });
+        if(state().approval){
+          const method=state().approval;
+          emit({method:'item/started',params:{threadId:'first',item:{id:'item1',type:'fileChange',changes:[{path:'/work/project/test.txt',kind:'add',diff:'+test'}]}}});
+          emit({id:77,method,params:{threadId:'first',turnId:'turn1',itemId:'item1',command:'echo test',cwd:'/work/project',permissions:{network:{enabled:true}},availableDecisions:['accept','decline']}});
+        }
         if (state().question) emit({ id: 1, method: 'item/tool/requestUserInput', params: { threadId: 'first', turnId: 'turn1', questions: [{ id: 'q1', header: 'Choice', question: 'Which path?', options: [{ label: 'Local', description: 'Keep work local' }, { label: 'Remote', description: 'Use remote work' }] }] } });
       }
     });

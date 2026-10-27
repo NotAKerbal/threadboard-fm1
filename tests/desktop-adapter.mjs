@@ -63,3 +63,25 @@ test('remote answers use a fresh projection; edited questions and approval reque
   }finally{globalThis.threadboardDesktop?.stop();globalThis.fetch=original;server.closeAllConnections();await new Promise(r=>server.close(r));await source.close();}
  }
 });
+
+test('desktop approvals confirm provider decisions and reject changed or resolved requests',async()=>{
+ for(const outcome of ['accept','decline','changed','resolved']){
+  const source=new DesktopSource(new T3Client(),'local'),board=new Board(null,'unused',true),server=makeServer(board,true,source);
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+  const base=`http://127.0.0.1:${server.address().port}`,original=globalThis.fetch;
+  const snap=demoSnapshot(),target=snap.threads[0];snap.threads=[target];target.pendingRuntimeRequest={id:'approval',kind:'command'};
+  const projection={runtimeRequests:[{id:'approval',kind:'command',status:'pending',responseCapability:{type:'live'}}],turnItems:[{type:'approval_request',requestId:'approval',prompt:'Run npm test?',options:[{decision:'accept',label:'Approve once'},{decision:'decline',label:'Deny'}]}]};
+  const shell={status:'live',snapshot:{_tag:'Some',value:snap}},catalog={entries:new Map([['remote',{target:{label:'Remote'}}]])},calls=[];
+  const registry={get:a=>a==='catalog'?catalog:shell};
+  globalThis.fetch=(url,options)=>original(url,{...options,headers:{...options.headers,origin:'t3code://app'}});
+  try{
+   await connect({registry,connections:{catalogValueAtom:'catalog'},shells:{stateValueAtom:id=>id},readProjection:async()=>structuredClone(projection),dispatchCommand:{async run(r,c){calls.push(c);target.pendingRuntimeRequest=null;projection.runtimeRequests[0].status='resolved';snap.snapshotSequence++;return {_tag:'Success',value:{sequence:snap.snapshotSequence}};}}},base);
+   const thread=(await source.snapshot()).threads[0],request=thread.questionRequest;assert.equal(request.kind,'approval');
+   if(outcome==='changed')projection.turnItems[0].prompt='Run a different command?';
+   if(outcome==='resolved')projection.runtimeRequests[0].status='resolved';
+   const result=source.dispatch({type:'runtime-request.respond',threadId:thread.id,requestId:request.id,decision:outcome==='decline'?'decline':'accept',questionSignature:JSON.stringify(request)});
+   if(['changed','resolved'].includes(outcome)){await assert.rejects(result,/did not apply/);assert.equal(calls.length,0);}
+   else{await result;assert.equal(calls.length,1);assert.equal(calls[0].input.decision,outcome);assert.equal(calls[0].input.threadId,target.id);assert(!('questionSignature' in calls[0].input));assert.equal((await source.snapshot()).threads[0].pendingRuntimeRequest,null);}
+  }finally{globalThis.threadboardDesktop?.stop();globalThis.fetch=original;server.closeAllConnections();await new Promise(r=>server.close(r));await source.close();}
+ }
+});
